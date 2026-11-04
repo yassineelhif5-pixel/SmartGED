@@ -146,7 +146,7 @@ export function CardHeader({ title, description, actions }: { title: string; des
   );
 }
 
-const badgeVariants = cva("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium", {
+const badgeVariants = cva("inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium", {
   variants: {
     tone: {
       neutral: "bg-muted text-muted-foreground",

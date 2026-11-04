@@ -91,8 +91,8 @@ export function DocumentTable({ items, loading, sort, order, onSort, rowActions,
                   )}
                 </td>
                 <td className="px-4 py-2.5"><DocumentStatusBadge status={d.status} /></td>
-                <td className="tabular hidden px-4 py-2.5 text-muted-foreground md:table-cell">{formatBytes(d.file_size)}</td>
-                <td className="hidden px-4 py-2.5 text-muted-foreground md:table-cell">
+                <td className="tabular hidden whitespace-nowrap px-4 py-2.5 text-muted-foreground md:table-cell">{formatBytes(d.file_size)}</td>
+                <td className="hidden whitespace-nowrap px-4 py-2.5 text-muted-foreground md:table-cell">
                   {formatDateTime(showDeleted ? d.deleted_at : d.created_at)}
                 </td>
                 <td className="px-2 py-2.5 text-right">
