@@ -1,0 +1,67 @@
+# DocuMind AI — local / single-host stack.
+#   cp backend/.env.example .env   (then set DOCUMIND_SECRET_KEY etc.)
+#   docker compose up --build      → http://localhost:8080
+name: documind
+
+x-backend: &backend
+  build: ./backend
+  env_file: .env
+  environment:
+    DOCUMIND_DATABASE_URL: postgresql+psycopg://documind:${POSTGRES_PASSWORD:-documind}@db:5432/documind
+    DOCUMIND_REDIS_URL: redis://redis:6379/0
+    DOCUMIND_STORAGE_LOCAL_ROOT: /data/storage
+    DOCUMIND_CLAMAV_HOST: clamav
+    DOCUMIND_CORS_ORIGINS: http://localhost:8080
+  volumes:
+    - storage:/data/storage
+  depends_on:
+    db: { condition: service_healthy }
+    redis: { condition: service_healthy }
+
+services:
+  db:
+    image: pgvector/pgvector:pg16   # pgvector ready for Phase 4 (semantic search)
+    environment:
+      POSTGRES_USER: documind
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-documind}
+      POSTGRES_DB: documind
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U documind"]
+      interval: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes: [redisdata:/data]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 10
+
+  clamav:
+    image: clamav/clamav:stable
+    profiles: ["antivirus"]   # docker compose --profile antivirus up
+
+  api:
+    <<: *backend
+    ports: ["8000:8000"]
+
+  worker:
+    <<: *backend
+    command: ["celery", "-A", "app.workers.celery_app.celery_app", "worker",
+              "-Q", "documents_priority,documents,dead_letter", "-c", "4", "--loglevel=INFO"]
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.workers.celery_app.celery_app inspect ping -d celery@$$HOSTNAME"]
+      interval: 30s
+
+  web:
+    build: ./frontend
+    ports: ["8080:80"]
+    depends_on: [api]
+
+volumes:
+  pgdata:
+  redisdata:
+  storage:
