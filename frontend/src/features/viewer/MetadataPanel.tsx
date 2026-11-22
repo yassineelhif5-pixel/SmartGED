@@ -1,54 +1,14 @@
 import { useEffect, useState } from "react";
-import { CheckCircle2, Circle, EyeOff, ShieldCheck, Sparkles } from "lucide-react";
+import { Boxes, CheckCircle2, Circle, EyeOff, ShieldCheck, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { api, ApiError } from "@/api/client";
 import { useInvalidateDocs } from "@/hooks/queries";
 import { useCan } from "@/stores/session";
-import type { DocumentDetail, DocumentType, MetadataValue } from "@/types/api";
-import { cn, displayValue } from "@/utils/format";
-import { Button, Input, Select, Textarea } from "@/components/ui/primitives";
+import type { DocumentDetail, DocumentType } from "@/types/api";
+import { cn } from "@/utils/format";
+import { Button } from "@/components/ui/primitives";
+import { FieldEditor } from "@/features/objects/FieldEditor";
 
-function FieldInput({ meta, def, value, onChange, disabled }: {
-  meta: MetadataValue; def?: DocumentType["fields"][number]; value: unknown; onChange: (v: unknown) => void; disabled: boolean;
-}) {
-  const v = value === null || value === undefined ? "" : value;
-  switch (meta.data_type) {
-    case "long_text":
-      return <Textarea value={String(v)} onChange={(e) => onChange(e.target.value)} disabled={disabled} rows={3} />;
-    case "date":
-      return <Input type="date" value={String(v)} onChange={(e) => onChange(e.target.value)} disabled={disabled} />;
-    case "datetime":
-      return <Input type="datetime-local" value={String(v).slice(0, 16)} onChange={(e) => onChange(e.target.value)} disabled={disabled} />;
-    case "integer":
-    case "decimal":
-    case "currency":
-      return <Input inputMode="decimal" value={String(v)} onChange={(e) => onChange(e.target.value)} disabled={disabled} className="tabular" />;
-    case "boolean":
-      return (
-        <Select value={v === "" ? "" : String(v)} onChange={(e) => onChange(e.target.value === "" ? null : e.target.value === "true")} disabled={disabled}>
-          <option value="">—</option><option value="true">Oui</option><option value="false">Non</option>
-        </Select>
-      );
-    case "dropdown":
-      return (
-        <Select value={String(v)} onChange={(e) => onChange(e.target.value || null)} disabled={disabled}>
-          <option value="">—</option>
-          {def?.allowed_values?.map((a) => <option key={a} value={a}>{a}</option>)}
-        </Select>
-      );
-    case "multi_select":
-      return (
-        <Select multiple value={Array.isArray(v) ? (v as string[]) : []} disabled={disabled} className="h-auto"
-                onChange={(e) => onChange(Array.from(e.target.selectedOptions).map((o) => o.value))}>
-          {def?.allowed_values?.map((a) => <option key={a} value={a}>{a}</option>)}
-        </Select>
-      );
-    case "calculated":
-      return <Input value={displayValue(v, meta.data_type)} disabled />;
-    default:
-      return <Input value={String(v)} onChange={(e) => onChange(e.target.value)} disabled={disabled} />;
-  }
-}
 
 export function MetadataPanel({ doc, type }: { doc: DocumentDetail; type?: DocumentType }) {
   const can = useCan();
@@ -110,6 +70,11 @@ export function MetadataPanel({ doc, type }: { doc: DocumentDetail; type?: Docum
               <div className="mb-1.5 flex items-center gap-1.5 text-xs">
                 <span className="font-medium">{m.display_name}</span>
                 {m.required && <span className="text-destructive">*</span>}
+                {m.source === "object" && (
+                  <span className="inline-flex items-center gap-0.5 text-teal-600 dark:text-teal-400" title={m.source_text ?? undefined}>
+                    <Boxes className="size-3" /> Référentiel
+                  </span>
+                )}
                 {m.source === "ai" && (
                   <span className="inline-flex items-center gap-0.5 text-primary" title={m.source_text ?? undefined}>
                     <Sparkles className="size-3" /> IA {m.confidence !== null && `${Math.round(m.confidence * 100)} %`}
@@ -129,7 +94,8 @@ export function MetadataPanel({ doc, type }: { doc: DocumentDetail; type?: Docum
                   <EyeOff className="size-3.5" /> Champ sensible — cliquer pour afficher
                 </button>
               ) : (
-                <FieldInput meta={m} def={def} value={draft[m.technical_name]} disabled={!editable}
+                <FieldEditor def={{ data_type: m.data_type, allowed_values: def?.allowed_values, validation_rules: def?.validation_rules ?? {} }}
+                             displayValue={m.display_value} value={draft[m.technical_name]} disabled={!editable}
                             onChange={(v) => setDraft((d) => ({ ...d, [m.technical_name]: v }))} />
               )}
               {errors[m.technical_name] && <p className="mt-1 text-xs text-destructive">{errors[m.technical_name]}</p>}

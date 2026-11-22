@@ -11,10 +11,12 @@ import { ConfirmDialog, Dialog, DropdownContent, DropdownItem, DropdownMenu, Dro
 import { DocumentStatusBadge } from "@/components/StatusBadge";
 import { Preview } from "@/features/viewer/Preview";
 import { MetadataPanel } from "@/features/viewer/MetadataPanel";
+import { ObjectsPanel } from "@/features/viewer/ObjectsPanel";
 import { InfoPanel, ProcessingPanel, RelationsPanel, TextPanel, VersionsPanel } from "@/features/viewer/Panels";
 
 const TABS = [
   { id: "metadata", label: "Métadonnées" },
+  { id: "objects", label: "Objets liés" },
   { id: "text", label: "Texte" },
   { id: "processing", label: "Traitement" },
   { id: "versions", label: "Versions" },
@@ -182,6 +184,7 @@ export default function DocumentViewerPage() {
           </div>
           <div className="min-h-0 flex-1">
             {tab === "metadata" && <MetadataPanel doc={doc} type={type} />}
+            {tab === "objects" && <ObjectsPanel doc={doc} />}
             {tab === "text" && <TextPanel doc={doc} />}
             {tab === "processing" && <ProcessingPanel doc={doc} />}
             {tab === "versions" && <VersionsPanel doc={doc} />}

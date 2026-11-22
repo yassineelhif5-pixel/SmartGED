@@ -1,7 +1,9 @@
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import {
+  Blocks,
   Bot,
+  Boxes,
   Building2,
   ChevronsUpDown,
   ClipboardCheck,
@@ -44,6 +46,7 @@ const NAV: { section: string; items: NavItem[] }[] = [
     items: [
       { to: "/", label: "Tableau de bord", icon: LayoutDashboard },
       { to: "/documents", label: "Documents", icon: FolderTree, perm: "document:read" },
+      { to: "/objects", label: "Référentiels", icon: Boxes, perm: "business_object:read" },
       { to: "/validation", label: "Validation", icon: ClipboardCheck, perm: "metadata:validate" },
       { to: "/processing", label: "Traitements", icon: Cpu, perm: "processing:read" },
       { to: "/trash", label: "Corbeille", icon: Trash2, perm: "document:delete" },
@@ -61,6 +64,7 @@ const NAV: { section: string; items: NavItem[] }[] = [
     section: "Administration",
     items: [
       { to: "/admin/document-types", label: "Types documentaires", icon: Shapes, perm: "document_type:read" },
+      { to: "/admin/object-types", label: "Types d'objets", icon: Blocks, perm: "object_type:update" },
       { to: "/admin/users", label: "Utilisateurs & rôles", icon: Users, perm: "user:read" },
       { to: "/admin/audit", label: "Journal d'audit", icon: ScrollText, perm: "audit:read" },
     ],

@@ -18,6 +18,8 @@ const AuditPage = lazy(() => import("@/pages/AuditPage"));
 const PlatformPage = lazy(() => import("@/pages/PlatformPage"));
 const SettingsPage = lazy(() => import("@/pages/SettingsPage"));
 const RoadmapPage = lazy(() => import("@/pages/RoadmapPage"));
+const ObjectsPage = lazy(() => import("@/pages/ObjectsPage"));
+const ObjectTypesPage = lazy(() => import("@/pages/ObjectTypesPage"));
 
 function FullScreenLoader() {
   return (
@@ -74,6 +76,8 @@ export const router = createBrowserRouter([
           { path: "/processing", element: s(<RequirePerm perm="processing:read"><ProcessingPage /></RequirePerm>) },
           { path: "/trash", element: s(<RequirePerm perm="document:delete"><TrashPage /></RequirePerm>) },
           { path: "/admin/document-types", element: s(<RequirePerm perm="document_type:read"><DocumentTypesPage /></RequirePerm>) },
+          { path: "/objects", element: s(<RequirePerm perm="business_object:read"><ObjectsPage /></RequirePerm>) },
+          { path: "/admin/object-types", element: s(<RequirePerm perm="object_type:read"><ObjectTypesPage /></RequirePerm>) },
           { path: "/admin/users", element: s(<RequirePerm perm="user:read"><UsersPage /></RequirePerm>) },
           { path: "/admin/audit", element: s(<RequirePerm perm="audit:read"><AuditPage /></RequirePerm>) },
           { path: "/platform", element: s(<RequirePlatform><PlatformPage /></RequirePlatform>) },

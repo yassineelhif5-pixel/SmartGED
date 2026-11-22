@@ -3,6 +3,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/api/client";
 import type {
   AuditEntry,
+  BusinessObject,
+  ObjectLink,
+  ObjectType,
+  ViewsResponse,
   DashboardStats,
   DocumentDetail,
   DocumentSummary,
@@ -38,6 +42,11 @@ export interface DocumentQuery {
   status?: string;
   tag?: string;
   trashed?: boolean;
+  mine?: boolean;
+  object_id?: string;
+  created_from?: string;
+  created_to?: string;
+  meta?: string[];
   sort?: string;
   order?: "asc" | "desc";
   page?: number;
@@ -105,3 +114,18 @@ export function useInvalidateDocs() {
 export function useApiMutation<TVars, TRes = unknown>(fn: (v: TVars) => Promise<TRes>, onSuccess?: (r: TRes) => void) {
   return useMutation({ mutationFn: fn, onSuccess });
 }
+
+export const useViews = () =>
+  useQuery({ queryKey: ["document-views"], queryFn: () => api<ViewsResponse>("/document-views") });
+export const useObjectTypes = () =>
+  useQuery({ queryKey: ["object-types"], queryFn: () => api<ObjectType[]>("/object-types") });
+export function useObjects(params: { object_type_id?: string; type_code?: string; q?: string; status?: string; page?: number; page_size?: number }, enabled = true) {
+  return useQuery({
+    queryKey: ["objects", params],
+    queryFn: () => api<Page<BusinessObject>>("/objects", { query: params }),
+    placeholderData: (prev) => prev,
+    enabled,
+  });
+}
+export const useDocumentObjects = (id: string) =>
+  useQuery({ queryKey: ["document-objects", id], queryFn: () => api<ObjectLink[]>(`/documents/${id}/objects`) });

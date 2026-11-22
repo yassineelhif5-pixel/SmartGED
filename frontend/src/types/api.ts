@@ -146,6 +146,8 @@ export interface MetadataValue {
   validated_at: string | null;
   sensitive: boolean;
   required: boolean;
+  display_value?: string | null;
+  reference_type?: string | null;
 }
 
 export interface DocumentDetail extends DocumentSummary {
@@ -257,4 +259,71 @@ export interface DashboardStats {
   ocr_avg_ms: number | null;
   failed_jobs: number;
   pending_validation: number;
+}
+
+export interface DocumentFilters {
+  q?: string | null;
+  folder_id?: UUID | null;
+  recursive?: boolean;
+  document_type_id?: UUID | null;
+  status?: DocumentStatus | null;
+  tag?: string | null;
+  mine?: boolean;
+  object_id?: UUID | null;
+  created_from?: string | null;
+  created_to?: string | null;
+  meta?: Record<string, string>;
+  sort?: string;
+  order?: "asc" | "desc";
+}
+
+export interface DocumentView {
+  id: UUID;
+  name: string;
+  description: string | null;
+  icon: string | null;
+  scope: "tenant" | "personal";
+  filters: DocumentFilters;
+  is_default: boolean;
+  position: number;
+  is_mine: boolean;
+  can_edit: boolean;
+}
+
+export interface ViewsResponse {
+  views: DocumentView[];
+  default_view_id: UUID | null;
+  default_source: "user" | "tenant" | "none";
+}
+
+export interface ObjectType {
+  id: UUID;
+  code: string;
+  name: string;
+  description: string | null;
+  color: string | null;
+  icon: string | null;
+  schema_version: number;
+  is_active: boolean;
+  fields: MetadataField[];
+  object_count: number;
+}
+
+export interface BusinessObject {
+  id: UUID;
+  object_type: { id: UUID; code: string; name: string; color: string | null; icon: string | null };
+  code: string;
+  name: string;
+  description: string | null;
+  status: "active" | "archived";
+  attributes: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+  document_count: number;
+}
+
+export interface ObjectLink {
+  id: UUID;
+  role: string;
+  object: BusinessObject;
 }
