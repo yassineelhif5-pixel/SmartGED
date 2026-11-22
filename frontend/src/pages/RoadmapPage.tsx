@@ -4,8 +4,9 @@ import { Badge, Card, PageHeader } from "@/components/ui/primitives";
 /** Honest product status: what is live in this build and what is coming next. */
 const PHASES = [
   { id: "foundation", name: "Phase 1 — Fondations", done: true, items: ["Multi-tenant + RLS PostgreSQL", "Authentification JWT + refresh rotatif", "RBAC granulaire", "Audit chaîné", "Design system"] },
-  { id: "ecm", name: "Phase 2 — GED cœur", done: true, items: ["Dossiers, documents, versions", "Check-in / check-out", "Corbeille", "Types documentaires & métadonnées", "OCR Tesseract réel", "Recherche plein texte", "Validation humaine"] },
-  { id: "ai", name: "Phase 3 — Intelligence IA", done: false, items: ["Fournisseurs IA multi-provider", "Classification automatique", "Extraction des métadonnées avec score de confiance", "Découpage de documents", "Prompt Studio"] },
+  { id: "ecm", name: "Phase 2 — GED cœur", done: true, items: ["Vues partagées et personnelles", "Référentiels (objets métier)", "Dossiers, documents, versions", "Check-in / check-out", "Corbeille", "Types documentaires & métadonnées", "OCR Tesseract réel", "Recherche plein texte", "Validation humaine"] },
+  { id: "ai", name: "Phase 3 — Intelligence IA", done: true, items: ["Fournisseurs IA multi-provider (clés chiffrées, secours)", "Classification automatique", "Extraction des métadonnées avec score de confiance", "Prompt Studio versionné", "Crédits et consommation IA"] },
+  { id: "split", name: "Phase 3b — Découpage documentaire", done: false, items: ["Détection des frontières dans un PDF multi-documents", "Interface de validation du découpage"] },
   { id: "search", name: "Phase 4 — Recherche intelligente & Lina", done: false, items: ["Embeddings pgvector", "Recherche hybride", "RAG avec contrôle des permissions", "Assistant Lina"] },
   { id: "workflows", name: "Phase 5 — Workflows", done: false, items: ["Designer React Flow", "Moteur d'exécution", "Approbations", "Notifications"] },
   { id: "ingestion", name: "Phase 6 — Ingestion Hub", done: false, items: ["SharePoint / OneDrive", "E-mail", "S3 / Azure Blob", "SFTP", "Webhooks"] },

@@ -879,4 +879,191 @@ CREATE POLICY tenant_isolation ON document_object_links USING ((current_setting(
 
 UPDATE smartged.alembic_version SET version_num='0003' WHERE smartged.alembic_version.version_num = '0002';
 
+-- Running upgrade 0003 -> 0004
+
+CREATE TABLE ai_model_prices (
+    provider_kind VARCHAR(40) NOT NULL, 
+    model VARCHAR(120) NOT NULL, 
+    input_per_mtok NUMERIC(12, 4) NOT NULL, 
+    output_per_mtok NUMERIC(12, 4) NOT NULL, 
+    currency VARCHAR(3) NOT NULL, 
+    effective_from TIMESTAMP WITH TIME ZONE NOT NULL, 
+    id UUID NOT NULL, 
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
+    CONSTRAINT pk_ai_model_prices PRIMARY KEY (id), 
+    CONSTRAINT uq_ai_model_prices_provider_kind_model_effective_from UNIQUE (provider_kind, model, effective_from)
+);
+
+CREATE TABLE ai_prompts (
+    tenant_id UUID, 
+    code VARCHAR(60) NOT NULL, 
+    name VARCHAR(120) NOT NULL, 
+    description VARCHAR(1000), 
+    category VARCHAR(60) NOT NULL, 
+    published_version INTEGER, 
+    id UUID NOT NULL, 
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
+    CONSTRAINT pk_ai_prompts PRIMARY KEY (id), 
+    CONSTRAINT fk_ai_prompts_tenant_id_tenants FOREIGN KEY(tenant_id) REFERENCES tenants (id) ON DELETE CASCADE
+);
+
+CREATE INDEX ix_ai_prompts_tenant_id ON ai_prompts (tenant_id);
+
+CREATE UNIQUE INDEX uq_ai_prompts_global_code ON ai_prompts (code) WHERE tenant_id IS NULL;
+
+CREATE UNIQUE INDEX uq_ai_prompts_tenant_code ON ai_prompts (tenant_id, code) WHERE tenant_id IS NOT NULL;
+
+CREATE TYPE ai_provider_kind AS ENUM ('openai', 'azure_openai', 'anthropic', 'gemini', 'openai_compatible');
+
+CREATE TABLE ai_providers (
+    name VARCHAR(120) NOT NULL, 
+    kind ai_provider_kind NOT NULL, 
+    base_url VARCHAR(500), 
+    api_version VARCHAR(40), 
+    api_key_encrypted TEXT, 
+    api_key_hint VARCHAR(12), 
+    default_model VARCHAR(120) NOT NULL, 
+    temperature FLOAT, 
+    max_tokens INTEGER NOT NULL, 
+    timeout_seconds INTEGER NOT NULL, 
+    is_active BOOLEAN NOT NULL, 
+    is_default BOOLEAN NOT NULL, 
+    fallback_provider_id UUID, 
+    last_test_at TIMESTAMP WITH TIME ZONE, 
+    last_test_ok BOOLEAN, 
+    last_test_message VARCHAR(1000), 
+    id UUID NOT NULL, 
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
+    tenant_id UUID NOT NULL, 
+    CONSTRAINT pk_ai_providers PRIMARY KEY (id), 
+    CONSTRAINT fk_ai_providers_fallback_provider_id_ai_providers FOREIGN KEY(fallback_provider_id) REFERENCES ai_providers (id) ON DELETE SET NULL, 
+    CONSTRAINT fk_ai_providers_tenant_id_tenants FOREIGN KEY(tenant_id) REFERENCES tenants (id) ON DELETE CASCADE, 
+    CONSTRAINT uq_ai_providers_tenant_id_name UNIQUE (tenant_id, name)
+);
+
+CREATE INDEX ix_ai_providers_tenant_id ON ai_providers (tenant_id);
+
+CREATE UNIQUE INDEX uq_ai_providers_tenant_default ON ai_providers (tenant_id) WHERE is_default;
+
+CREATE TABLE ai_usage_events (
+    id BIGINT GENERATED ALWAYS AS IDENTITY, 
+    tenant_id UUID NOT NULL, 
+    idempotency_key VARCHAR(200) NOT NULL, 
+    user_id UUID, 
+    feature VARCHAR(60) NOT NULL, 
+    provider_id UUID, 
+    provider_kind VARCHAR(40) NOT NULL, 
+    model VARCHAR(120) NOT NULL, 
+    prompt_code VARCHAR(60), 
+    prompt_version INTEGER, 
+    document_id UUID, 
+    status VARCHAR(20) NOT NULL, 
+    input_tokens INTEGER NOT NULL, 
+    output_tokens INTEGER NOT NULL, 
+    latency_ms INTEGER, 
+    estimated_cost NUMERIC(14, 6), 
+    price_id UUID, 
+    credits INTEGER NOT NULL, 
+    error VARCHAR(1000), 
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
+    CONSTRAINT pk_ai_usage_events PRIMARY KEY (id), 
+    CONSTRAINT fk_ai_usage_events_tenant_id_tenants FOREIGN KEY(tenant_id) REFERENCES tenants (id) ON DELETE CASCADE, 
+    CONSTRAINT uq_ai_usage_events_idempotency_key UNIQUE (idempotency_key)
+);
+
+CREATE INDEX ix_ai_usage_tenant_created ON ai_usage_events (tenant_id, created_at);
+
+CREATE TYPE ai_prompt_status AS ENUM ('draft', 'published', 'archived');
+
+CREATE TABLE ai_prompt_versions (
+    prompt_id UUID NOT NULL, 
+    tenant_id UUID, 
+    version INTEGER NOT NULL, 
+    status ai_prompt_status NOT NULL, 
+    system_prompt TEXT NOT NULL, 
+    user_template TEXT NOT NULL, 
+    variables JSONB NOT NULL, 
+    output_format VARCHAR(20) NOT NULL, 
+    model VARCHAR(120), 
+    notes VARCHAR(1000), 
+    created_by UUID, 
+    published_at TIMESTAMP WITH TIME ZONE, 
+    id UUID NOT NULL, 
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
+    CONSTRAINT pk_ai_prompt_versions PRIMARY KEY (id), 
+    CONSTRAINT fk_ai_prompt_versions_created_by_users FOREIGN KEY(created_by) REFERENCES users (id), 
+    CONSTRAINT fk_ai_prompt_versions_prompt_id_ai_prompts FOREIGN KEY(prompt_id) REFERENCES ai_prompts (id) ON DELETE CASCADE, 
+    CONSTRAINT fk_ai_prompt_versions_tenant_id_tenants FOREIGN KEY(tenant_id) REFERENCES tenants (id) ON DELETE CASCADE, 
+    CONSTRAINT uq_ai_prompt_versions_prompt_id_version UNIQUE (prompt_id, version)
+);
+
+CREATE INDEX ix_ai_prompt_versions_prompt_id ON ai_prompt_versions (prompt_id);
+
+CREATE INDEX ix_ai_prompt_versions_tenant_id ON ai_prompt_versions (tenant_id);
+
+CREATE TABLE ai_prompt_tests (
+    prompt_version_id UUID NOT NULL, 
+    document_id UUID, 
+    provider_id UUID, 
+    model VARCHAR(120), 
+    output_text TEXT, 
+    parsed JSONB, 
+    ok BOOLEAN NOT NULL, 
+    error TEXT, 
+    input_tokens INTEGER, 
+    output_tokens INTEGER, 
+    latency_ms INTEGER, 
+    estimated_cost NUMERIC(14, 6), 
+    created_by UUID, 
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
+    id UUID NOT NULL, 
+    tenant_id UUID NOT NULL, 
+    CONSTRAINT pk_ai_prompt_tests PRIMARY KEY (id), 
+    CONSTRAINT fk_ai_prompt_tests_created_by_users FOREIGN KEY(created_by) REFERENCES users (id), 
+    CONSTRAINT fk_ai_prompt_tests_document_id_documents FOREIGN KEY(document_id) REFERENCES documents (id) ON DELETE SET NULL, 
+    CONSTRAINT fk_ai_prompt_tests_prompt_version_id_ai_prompt_versions FOREIGN KEY(prompt_version_id) REFERENCES ai_prompt_versions (id) ON DELETE CASCADE, 
+    CONSTRAINT fk_ai_prompt_tests_provider_id_ai_providers FOREIGN KEY(provider_id) REFERENCES ai_providers (id) ON DELETE SET NULL, 
+    CONSTRAINT fk_ai_prompt_tests_tenant_id_tenants FOREIGN KEY(tenant_id) REFERENCES tenants (id) ON DELETE CASCADE
+);
+
+CREATE INDEX ix_ai_prompt_tests_prompt_version_id ON ai_prompt_tests (prompt_version_id);
+
+CREATE INDEX ix_ai_prompt_tests_tenant_id ON ai_prompt_tests (tenant_id);
+
+ALTER TABLE ai_providers ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE ai_providers FORCE ROW LEVEL SECURITY;
+
+ALTER TABLE ai_prompt_tests ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE ai_prompt_tests FORCE ROW LEVEL SECURITY;
+
+ALTER TABLE ai_usage_events ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE ai_usage_events FORCE ROW LEVEL SECURITY;
+
+ALTER TABLE ai_prompts ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE ai_prompts FORCE ROW LEVEL SECURITY;
+
+ALTER TABLE ai_prompt_versions ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE ai_prompt_versions FORCE ROW LEVEL SECURITY;
+
+CREATE POLICY tenant_isolation ON ai_providers USING ((current_setting('app.bypass_rls', true) = 'on') OR (tenant_id::text = nullif(current_setting('app.tenant_id', true), ''))) WITH CHECK ((current_setting('app.bypass_rls', true) = 'on') OR (tenant_id::text = nullif(current_setting('app.tenant_id', true), '')));
+
+CREATE POLICY tenant_isolation ON ai_prompt_tests USING ((current_setting('app.bypass_rls', true) = 'on') OR (tenant_id::text = nullif(current_setting('app.tenant_id', true), ''))) WITH CHECK ((current_setting('app.bypass_rls', true) = 'on') OR (tenant_id::text = nullif(current_setting('app.tenant_id', true), '')));
+
+CREATE POLICY tenant_isolation ON ai_usage_events USING ((current_setting('app.bypass_rls', true) = 'on') OR (tenant_id::text = nullif(current_setting('app.tenant_id', true), ''))) WITH CHECK ((current_setting('app.bypass_rls', true) = 'on') OR (tenant_id::text = nullif(current_setting('app.tenant_id', true), '')));
+
+CREATE POLICY tenant_isolation ON ai_prompts USING ((current_setting('app.bypass_rls', true) = 'on') OR tenant_id IS NULL OR (tenant_id::text = nullif(current_setting('app.tenant_id', true), ''))) WITH CHECK ((current_setting('app.bypass_rls', true) = 'on') OR (tenant_id::text = nullif(current_setting('app.tenant_id', true), '')));
+
+CREATE POLICY tenant_isolation ON ai_prompt_versions USING ((current_setting('app.bypass_rls', true) = 'on') OR tenant_id IS NULL OR (tenant_id::text = nullif(current_setting('app.tenant_id', true), ''))) WITH CHECK ((current_setting('app.bypass_rls', true) = 'on') OR (tenant_id::text = nullif(current_setting('app.tenant_id', true), '')));
+
+UPDATE smartged.alembic_version SET version_num='0004' WHERE smartged.alembic_version.version_num = '0003';
+
 

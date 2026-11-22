@@ -4,6 +4,7 @@ import {
   Blocks,
   Bot,
   Boxes,
+  BrainCircuit,
   Building2,
   ChevronsUpDown,
   ClipboardCheck,
@@ -64,6 +65,7 @@ const NAV: { section: string; items: NavItem[] }[] = [
     section: "Administration",
     items: [
       { to: "/admin/document-types", label: "Types documentaires", icon: Shapes, perm: "document_type:read" },
+      { to: "/admin/ai", label: "Intelligence IA", icon: BrainCircuit, perm: "prompt:read" },
       { to: "/admin/object-types", label: "Types d'objets", icon: Blocks, perm: "object_type:update" },
       { to: "/admin/users", label: "Utilisateurs & rôles", icon: Users, perm: "user:read" },
       { to: "/admin/audit", label: "Journal d'audit", icon: ScrollText, perm: "audit:read" },
@@ -89,7 +91,7 @@ function NavEntry({ item }: { item: NavItem }) {
       <span className="truncate">{item.label}</span>
       {item.soon && (
         <span className="ml-auto rounded bg-white/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-sidebar-muted">
-          Phase 3+
+          À venir
         </span>
       )}
     </NavLink>

@@ -1,6 +1,6 @@
 # PROJECT_STATUS — SmartGED (DocuMind AI)
 
-_Dernière mise à jour : 22 novembre 2026 — v0.3 : vues partagées/personnelles, référentiels, préparation Supabase_
+_Dernière mise à jour : 22 novembre 2026 — v0.4 : phase 3 Intelligence IA (hors découpage documentaire)_
 
 Dépôt : https://github.com/yassineelhif5-pixel/SmartGED (branches `main`, `develop`)
 
@@ -30,11 +30,17 @@ Dépôt : https://github.com/yassineelhif5-pixel/SmartGED (branches `main`, `dev
 | Filtres avancés (dates, tag, mes documents, objet lié, valeurs de métadonnées) | ✅ | ✅ | ✅ |
 | Référentiels : types d'objets configurables + fiches (fournisseur, client, projet…) | ✅ | ✅ | ✅ |
 | Liens document ↔ objet, champ « référence », alimentation automatique des métadonnées | ✅ | ✅ onglet Objets liés | ✅ |
+| Fournisseurs IA (Anthropic, OpenAI, Azure OpenAI, Gemini, compatible OpenAI), clés chiffrées, retry + secours | ✅ | ✅ | ✅ formats réels simulés |
+| Classification automatique (seuil, suggestion pour l'humain) | ✅ | ✅ bandeau de suggestion | ✅ |
+| Extraction des métadonnées (confiance, page, texte source, garde-fous) | ✅ | ✅ badges IA | ✅ |
+| Prompt Studio : versions, test avant publication, rollback | ✅ | ✅ | ✅ |
+| Registre de consommation idempotent, tarifs versionnés, quota de crédits | ✅ | ✅ onglet Consommation | ✅ |
+| Résumé de document (Lina) | ✅ | ✅ | ✅ |
 | Schéma PostgreSQL dédié (`DOCUMIND_DB_SCHEMA`) + migrations SQL Supabase | ✅ | — | ✅ base vierge |
 
 ## Tests
 
-- Backend : **36/36** (dont 9 sur les vues et les référentiels)
+- Backend : **45/45** (dont 9 sur l'IA, 9 sur les vues et les référentiels)
 - Ancien total backend : 27/27 (`pytest`) sur PostgreSQL réel — dont 7 tests d'isolation inter-tenant (lecture, écriture, RLS sans filtre applicatif, en-tête forgé, audit immuable).
 - Frontend : **7/7** (Vitest), `tsc` strict sans erreur, build de production OK.
 - Parcours bout-en-bout vérifié dans Chrome headless avec worker Celery réel : connexion → dépôt de 3 fichiers (PDF texte, PDF scanné, texte) → OCR → recherche sur le texte du PDF scanné → saisie et validation des métadonnées → publication. Aucune erreur console.
@@ -44,6 +50,9 @@ Dépôt : https://github.com/yassineelhif5-pixel/SmartGED (branches `main`, `dev
 
 - **Supabase non encore provisionné** : la limite de 2 projets gratuits du compte est atteinte. Les migrations sont prêtes dans `supabase/` ; à appliquer dès qu'une place est libérée.
 - Les vues partagées ne mémorisent pas encore la sélection de colonnes du tableau.
+- **IA testée sans vraie clé** : adaptateurs vérifiés sur les formats de réponse officiels (transport HTTP simulé) et parcours navigateur avec un LLM local de test. Un essai avec une clé réelle reste à faire.
+- Découpage des PDF multi-documents (Document Splitting Engine) : non commencé.
+- Pas de tarifs IA préremplis : à saisir par le Super Admin (sinon 1 crédit / 1 000 tokens).
 
 - Pas encore de SSO (Entra ID, SAML), MFA ni envoi d'e-mails d'invitation (phase 7 / notifications).
 - L'aperçu TIFF et Office n'est pas rendu dans le navigateur (le texte extrait reste consultable).
@@ -55,6 +64,8 @@ Dépôt : https://github.com/yassineelhif5-pixel/SmartGED (branches `main`, `dev
 
 - **ADR-007** Les attributs d'objets métier réutilisent `metadata_definitions` (un champ appartient soit à un type documentaire, soit à un type d'objet — contrainte `single_owner`) : un seul moteur de validation et un seul designer.
 - **ADR-008** Convention d'alimentation : même nom technique, ou `{code_type}_name` / `{code_type}_code` ; jamais d'écrasement sans `overwrite`, valeurs marquées `source = object` et toujours soumises à validation humaine.
+- **ADR-010** Adaptateurs IA en HTTP brut (httpx) plutôt que SDK : moteur neutre vis-à-vis des fournisseurs, testable sur les formats réels.
+- **ADR-011** Prompts plateforme partagés (`tenant_id` NULL, lisibles par tous via RLS) + surcharges par organisation ; publication conditionnée à un test réussi.
 - **ADR-009** Sur Supabase, schéma `smartged` non exposé à PostgREST et rôle `smartged_app` NOBYPASSRLS ; `postgres` réservé aux migrations.
 
 - **ADR-001** Monolithe modulaire FastAPI (pas de microservices prématurés).
@@ -64,11 +75,10 @@ Dépôt : https://github.com/yassineelhif5-pixel/SmartGED (branches `main`, `dev
 - **ADR-005** Pipeline à étapes persistées (`processing_jobs`) uniques par (document, version, étape) pour l'idempotence.
 - **ADR-006** Aucune simulation : une capacité absente est enregistrée `not_configured`.
 
-## Prochaines étapes (Phase 3 — AI Intelligence)
+## Prochaines étapes
 
-1. Tables `ai_providers`, `ai_models`, `ai_configurations` (clés chiffrées par tenant), adaptateurs OpenAI / Azure OpenAI / Anthropic / Gemini / local.
-2. Prompt Management Studio (prompts versionnés, variables, test avant publication).
-3. Classification automatique + extraction des métadonnées avec score de confiance, page et texte source.
-4. Registre `ai_usage_events` idempotent (pas de double comptage en retry) + crédits.
-5. Document Splitting Engine et interface de validation du découpage.
-6. ACL au niveau dossier / document.
+1. Brancher une vraie clé IA et calibrer le seuil de confiance sur des documents réels.
+2. Document Splitting Engine (détection des frontières, écran de validation, documents enfants liés).
+3. Phase 4 : embeddings pgvector, recherche hybride, assistant Lina avec RAG respectant les permissions.
+4. Provisionner Supabase (migrations prêtes dans `supabase/`, révision 0004).
+5. ACL au niveau dossier / document.

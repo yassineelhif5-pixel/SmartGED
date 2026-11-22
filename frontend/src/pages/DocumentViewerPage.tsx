@@ -12,6 +12,7 @@ import { DocumentStatusBadge } from "@/components/StatusBadge";
 import { Preview } from "@/features/viewer/Preview";
 import { MetadataPanel } from "@/features/viewer/MetadataPanel";
 import { ObjectsPanel } from "@/features/viewer/ObjectsPanel";
+import { AIBar } from "@/features/viewer/AIBar";
 import { InfoPanel, ProcessingPanel, RelationsPanel, TextPanel, VersionsPanel } from "@/features/viewer/Panels";
 
 const TABS = [
@@ -161,6 +162,7 @@ export default function DocumentViewerPage() {
         </div>
       </div>
 
+      {!doc.deleted_at && <AIBar doc={doc} />}
       <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(0,1fr)_420px]">
         <Card className="min-h-[50vh] overflow-hidden">
           <Preview doc={doc} version={doc.current_version} />

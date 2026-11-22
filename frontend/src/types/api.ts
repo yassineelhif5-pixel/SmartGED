@@ -327,3 +327,79 @@ export interface ObjectLink {
   role: string;
   object: BusinessObject;
 }
+
+export type ProviderKind = "openai" | "azure_openai" | "anthropic" | "gemini" | "openai_compatible";
+
+export interface AIProviderT {
+  id: UUID;
+  name: string;
+  kind: ProviderKind;
+  base_url: string | null;
+  api_version: string | null;
+  api_key_set: boolean;
+  api_key_hint: string | null;
+  default_model: string;
+  temperature: number | null;
+  max_tokens: number;
+  timeout_seconds: number;
+  is_active: boolean;
+  is_default: boolean;
+  fallback_provider_id: UUID | null;
+  last_test_at: string | null;
+  last_test_ok: boolean | null;
+  last_test_message: string | null;
+}
+
+export interface PromptVersion {
+  id: UUID;
+  version: number;
+  status: "draft" | "published" | "archived";
+  system_prompt: string;
+  user_template: string;
+  variables: string[];
+  output_format: string;
+  model: string | null;
+  notes: string | null;
+  created_at: string;
+  published_at: string | null;
+}
+
+export interface Prompt {
+  id: UUID;
+  code: string;
+  name: string;
+  description: string | null;
+  category: string;
+  scope: "platform" | "tenant";
+  published_version: number | null;
+  effective: boolean;
+  versions: PromptVersion[];
+}
+
+export interface PromptTestResult {
+  id: UUID;
+  ok: boolean;
+  parsed: Record<string, unknown> | null;
+  output_text: string | null;
+  error: string | null;
+  model: string | null;
+  provider: string | null;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  latency_ms: number | null;
+  estimated_cost: string | number | null;
+  credits: number | null;
+  created_at: string;
+}
+
+export interface UsageGroup { key: string; calls: number; credits: number; tokens: number; cost: number | null }
+
+export interface AIUsage {
+  period_days: number;
+  credits_used_month: number;
+  credits_limit_month: number | null;
+  totals: { calls: number; credits: number; input_tokens: number; output_tokens: number; cost: number | null; errors: number; avg_latency_ms: number | null };
+  by_feature: UsageGroup[];
+  by_model: UsageGroup[];
+  per_day: { date: string; credits: number }[];
+}

@@ -18,6 +18,7 @@ const AuditPage = lazy(() => import("@/pages/AuditPage"));
 const PlatformPage = lazy(() => import("@/pages/PlatformPage"));
 const SettingsPage = lazy(() => import("@/pages/SettingsPage"));
 const RoadmapPage = lazy(() => import("@/pages/RoadmapPage"));
+const AIPage = lazy(() => import("@/pages/AIPage"));
 const ObjectsPage = lazy(() => import("@/pages/ObjectsPage"));
 const ObjectTypesPage = lazy(() => import("@/pages/ObjectTypesPage"));
 
@@ -78,6 +79,7 @@ export const router = createBrowserRouter([
           { path: "/admin/document-types", element: s(<RequirePerm perm="document_type:read"><DocumentTypesPage /></RequirePerm>) },
           { path: "/objects", element: s(<RequirePerm perm="business_object:read"><ObjectsPage /></RequirePerm>) },
           { path: "/admin/object-types", element: s(<RequirePerm perm="object_type:read"><ObjectTypesPage /></RequirePerm>) },
+          { path: "/admin/ai", element: s(<RequirePerm perm="prompt:read"><AIPage /></RequirePerm>) },
           { path: "/admin/users", element: s(<RequirePerm perm="user:read"><UsersPage /></RequirePerm>) },
           { path: "/admin/audit", element: s(<RequirePerm perm="audit:read"><AuditPage /></RequirePerm>) },
           { path: "/platform", element: s(<RequirePlatform><PlatformPage /></RequirePlatform>) },

@@ -12,7 +12,7 @@ Deux migrations, à appliquer dans l'ordre (SQL editor Supabase, `supabase db pu
 
 | Fichier | Contenu |
 |---|---|
-| `migrations/20261122000100_smartged_schema.sql` | 33 tables, enums, index, politiques RLS, trigger d'audit append-only, `alembic_version` = `0003` |
+| `migrations/20261122000100_smartged_schema.sql` | 39 tables, enums, index, politiques RLS, trigger d'audit append-only, `alembic_version` = `0004` |
 | `migrations/20261122000200_smartged_app_role.sql` | rôle `smartged_app` (NOBYPASSRLS), droits, révocation `anon` / `authenticated` |
 
 Ces fichiers sont générés depuis Alembic (`DOCUMIND_DB_SCHEMA=smartged alembic upgrade head --sql`) : Alembic reste la source de vérité, les migrations suivantes s'appliquent avec `alembic upgrade head`.
