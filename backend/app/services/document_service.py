@@ -21,6 +21,7 @@ from app.models import (
     DocumentType,
     DocumentVersion,
     Folder,
+    MetadataDataType,
     StepStatus,
     User,
 )
@@ -165,9 +166,14 @@ def build_search(
     tenant_id: uuid.UUID, *, q: str | None, folder_id: uuid.UUID | None, recursive_folder_ids: set[uuid.UUID] | None,
     document_type_id: uuid.UUID | None, status: DocumentStatus | None, tag: str | None, owner_id: uuid.UUID | None,
     created_from: datetime | None, created_to: datetime | None, trashed: bool, sort: str, order: str,
-    metadata_filters: dict[str, str] | None = None,
+    metadata_filters: dict[str, str] | None = None, object_id: uuid.UUID | None = None,
 ) -> Select:
     stmt = select(Document).where(Document.tenant_id == tenant_id)
+    if object_id:
+        from app.models import DocumentObjectLink
+
+        stmt = stmt.where(Document.id.in_(select(DocumentObjectLink.document_id).where(
+            DocumentObjectLink.tenant_id == tenant_id, DocumentObjectLink.object_id == object_id)))
     stmt = stmt.where(Document.deleted_at.is_not(None) if trashed else Document.deleted_at.is_(None))
     if recursive_folder_ids is not None:
         stmt = stmt.where(Document.folder_id.in_(recursive_folder_ids))
@@ -238,6 +244,13 @@ def metadata_view(db: Session, doc: Document) -> list[dict[str, Any]]:
                                             DocumentMetadataValue.tenant_id == doc.tenant_id))}
     out = []
     fields = doc.document_type.fields if doc.document_type else []
+    ref_ids = [str(v.value) for v in values.values()
+               if v.definition and v.definition.data_type == MetadataDataType.reference and v.value]
+    labels = {}
+    if ref_ids:
+        from app.services.object_service import reference_labels
+
+        labels = reference_labels(db, doc.tenant_id, ref_ids)
     for f in fields:
         if not f.visible:
             continue
@@ -249,6 +262,8 @@ def metadata_view(db: Session, doc: Document) -> list[dict[str, Any]]:
             "source_text": v.source_text if v else None,
             "validation_status": v.validation_status if v else StepStatus.pending,
             "validated_at": v.validated_at if v else None, "sensitive": f.sensitive, "required": f.required,
+            "display_value": labels.get(str(v.value)) if v and v.value is not None else None,
+            "reference_type": (f.validation_rules or {}).get("object_type_code"),
         })
     return out
 
@@ -287,6 +302,23 @@ def update_document(db: Session, tenant_id: uuid.UUID, document_id: uuid.UUID, *
     return doc
 
 
+def _check_reference(db: Session, tenant_id: uuid.UUID, defn: Any, value: Any) -> Any:
+    """A reference field holds the id of a business object of the configured type."""
+    from app.models import BusinessObject
+
+    code = (defn.validation_rules or {}).get("object_type_code")
+    if not code:
+        return None  # free-text reference (legacy behaviour)
+    try:
+        obj_id = uuid.UUID(str(value))
+    except ValueError as exc:
+        raise ValidationFailed(f"{defn.display_name}: select an existing object") from exc
+    obj = db.scalar(select(BusinessObject).where(BusinessObject.id == obj_id, BusinessObject.tenant_id == tenant_id))
+    if obj is None or obj.object_type.code != code:
+        raise ValidationFailed(f"{defn.display_name}: unknown object")
+    return obj
+
+
 def set_metadata(db: Session, tenant_id: uuid.UUID, document_id: uuid.UUID, user_id: uuid.UUID,
                  values: dict[str, Any], validate_fields: list[str], can_validate: bool) -> Document:
     doc = get_owned(db, Document, tenant_id, document_id, label="Document")
@@ -302,10 +334,19 @@ def set_metadata(db: Session, tenant_id: uuid.UUID, document_id: uuid.UUID, user
         select(DocumentMetadataValue).where(DocumentMetadataValue.document_id == doc.id))}
     now = datetime.now(UTC)
     errors = []
+    autofill: list[uuid.UUID] = []
     for name, raw in values.items():
         defn = fields[name]
         try:
             value = metadata_service.coerce_value(defn, raw)
+            if defn.data_type == MetadataDataType.reference and value is not None:
+                obj = _check_reference(db, tenant_id, defn, value)
+                if obj is not None:
+                    from app.services import object_service
+
+                    object_service.link(db, tenant_id, doc.id, obj.id, defn.technical_name, user_id)
+                    if (defn.validation_rules or {}).get("autofill"):
+                        autofill.append(obj.id)
         except ValidationFailed as exc:
             errors.append({"field": name, "message": exc.message})
             continue
@@ -323,6 +364,15 @@ def set_metadata(db: Session, tenant_id: uuid.UUID, document_id: uuid.UUID, user
             row.validated_at = None
     if errors:
         raise ValidationFailed("Some metadata values are invalid", details=errors)
+    if autofill:
+        from app.services import object_service
+
+        db.flush()
+        for obj_id in autofill:  # fill the other empty fields from the referenced object
+            object_service.apply_to_document(db, tenant_id, doc.id, obj_id, user_id, overwrite=False,
+                                             only_fields=set(fields) - set(values))
+        existing = {v.definition_id: v for v in db.scalars(
+            select(DocumentMetadataValue).where(DocumentMetadataValue.document_id == doc.id))}
     for name in validate_fields:
         defn = fields[name]
         row = existing.get(defn.id)

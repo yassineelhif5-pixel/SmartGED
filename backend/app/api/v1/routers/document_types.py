@@ -13,32 +13,21 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.core.errors import Conflict, ValidationFailed
+from app.core.errors import Conflict
 from app.database.session import get_db
-from app.models import Document, DocumentType, MetadataDataType, MetadataDefinition
+from app.models import Document, DocumentType, MetadataDefinition
 from app.repositories.base import get_owned
 from app.schemas.common import Message
 from app.schemas.ged import DocumentTypeIn, DocumentTypeOut
 from app.security.context import Principal, require
+from app.services import schema_designer
 
 router = APIRouter(prefix="/document-types", tags=["Document types & metadata"])
-
-_STRUCTURAL = ("technical_name", "data_type", "required", "allowed_values", "validation_rules")
-
 
 def _out(db: Session, dt: DocumentType) -> DocumentTypeOut:
     count = db.scalar(select(func.count()).select_from(Document).where(
         Document.document_type_id == dt.id, Document.deleted_at.is_(None))) or 0
     return DocumentTypeOut.model_validate(dt).model_copy(update={"document_count": int(count)})
-
-
-def _validate_fields(body: DocumentTypeIn) -> None:
-    names = [f.technical_name for f in body.fields]
-    if len(names) != len(set(names)):
-        raise ValidationFailed("Field technical names must be unique within a type")
-    for f in body.fields:
-        if f.data_type in (MetadataDataType.dropdown, MetadataDataType.multi_select) and not f.allowed_values:
-            raise ValidationFailed(f"{f.display_name}: a list field needs allowed values")
 
 
 @router.get("", response_model=list[DocumentTypeOut])
@@ -56,7 +45,7 @@ def get_type(type_id: uuid.UUID, p: Principal = Depends(require("document_type:r
 @router.post("", response_model=DocumentTypeOut, status_code=201)
 def create_type(body: DocumentTypeIn, p: Principal = Depends(require("document_type:create")),
                 db: Session = Depends(get_db)) -> DocumentTypeOut:
-    _validate_fields(body)
+    schema_designer.validate_fields(db, p.tenant_id, body.fields)
     if db.scalar(select(DocumentType.id).where(DocumentType.tenant_id == p.tenant_id, DocumentType.code == body.code)):
         raise Conflict("A document type with this code already exists")
     dt = DocumentType(tenant_id=p.tenant_id, **body.model_dump(exclude={"fields"}))
@@ -72,7 +61,7 @@ def create_type(body: DocumentTypeIn, p: Principal = Depends(require("document_t
 @router.put("/{type_id}", response_model=DocumentTypeOut)
 def update_type(type_id: uuid.UUID, body: DocumentTypeIn, p: Principal = Depends(require("document_type:update")),
                 db: Session = Depends(get_db)) -> DocumentTypeOut:
-    _validate_fields(body)
+    schema_designer.validate_fields(db, p.tenant_id, body.fields)
     dt = get_owned(db, DocumentType, p.tenant_id, type_id, label="Document type")
     if body.code != dt.code and db.scalar(select(DocumentType.id).where(
             DocumentType.tenant_id == p.tenant_id, DocumentType.code == body.code)):
@@ -80,24 +69,8 @@ def update_type(type_id: uuid.UUID, body: DocumentTypeIn, p: Principal = Depends
     for key, value in body.model_dump(exclude={"fields"}).items():
         setattr(dt, key, value)
 
-    existing = {f.id: f for f in dt.fields}
-    structural_change = False
-    kept: list[MetadataDefinition] = []
-    for pos, f in enumerate(body.fields):
-        data = f.model_dump(exclude={"id"})
-        if f.id and f.id in existing:
-            row = existing[f.id]
-            if any(getattr(row, k) != data[k] for k in _STRUCTURAL):
-                structural_change = True
-            for k, v in data.items():
-                setattr(row, k, v)
-            row.position = pos
-        else:
-            row = MetadataDefinition(tenant_id=p.tenant_id, position=pos, **data)
-            structural_change = True
-        kept.append(row)
-    if len(kept) != len(existing) or any(k.id not in existing for k in kept if k.id):
-        structural_change = True
+    kept, structural_change = schema_designer.sync_fields(dt.fields, body.fields, tenant_id=p.tenant_id,
+                                                          owner={})
     dt.fields[:] = kept
     if structural_change:
         dt.schema_version += 1

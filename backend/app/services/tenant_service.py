@@ -24,6 +24,7 @@ from app.models import (
     MembershipStatus,
     MetadataDataType,
     MetadataDefinition,
+    ObjectType,
     Permission,
     Role,
     RolePermission,
@@ -66,6 +67,8 @@ STARTER_TYPES: list[dict] = [
         "fields": [
             ("invoice_number", "N° de facture", MetadataDataType.text, True),
             ("invoice_date", "Date de facture", MetadataDataType.date, True),
+            ("supplier_ref", "Fiche fournisseur", MetadataDataType.reference, False,
+             {"object_type_code": "supplier", "autofill": True}),
             ("supplier_name", "Fournisseur", MetadataDataType.text, True),
             ("supplier_vat", "TVA fournisseur", MetadataDataType.text, False),
             ("total_amount", "Montant TTC", MetadataDataType.currency, True),
@@ -93,6 +96,42 @@ STARTER_TYPES: list[dict] = [
             ("recipient", "Destinataire", MetadataDataType.text, False),
             ("subject", "Objet", MetadataDataType.text, False),
             ("letter_date", "Date", MetadataDataType.date, False),
+        ],
+    },
+]
+
+
+# Starter business-object types (non-document reference data). Fully editable by the tenant.
+STARTER_OBJECT_TYPES: list[dict] = [
+    {
+        "code": "supplier", "name": "Fournisseur", "color": "#0d9488", "icon": "truck",
+        "description": "Référentiel fournisseurs : alimente automatiquement les factures.",
+        "fields": [
+            ("supplier_vat", "N° TVA", MetadataDataType.text, False),
+            ("siret", "SIRET", MetadataDataType.text, False),
+            ("iban", "IBAN", MetadataDataType.text, False, {}, True),
+            ("email", "E-mail", MetadataDataType.text, False),
+            ("address", "Adresse", MetadataDataType.long_text, False),
+            ("payment_terms_days", "Délai de paiement (jours)", MetadataDataType.integer, False),
+        ],
+    },
+    {
+        "code": "customer", "name": "Client", "color": "#ea580c", "icon": "building",
+        "description": "Référentiel clients.",
+        "fields": [
+            ("customer_vat", "N° TVA", MetadataDataType.text, False),
+            ("email", "E-mail", MetadataDataType.text, False),
+            ("address", "Adresse", MetadataDataType.long_text, False),
+        ],
+    },
+    {
+        "code": "project", "name": "Projet", "color": "#4f46e5", "icon": "folder-kanban",
+        "description": "Projets auxquels rattacher contrats, factures et livrables.",
+        "fields": [
+            ("project_manager", "Chef de projet", MetadataDataType.text, False),
+            ("start_date", "Début", MetadataDataType.date, False),
+            ("end_date", "Fin", MetadataDataType.date, False),
+            ("budget", "Budget", MetadataDataType.currency, False),
         ],
     },
 ]
@@ -199,6 +238,8 @@ def provision_tenant(
     for folder_name in ("Général", "Factures", "Contrats", "Courrier"):
         db.add(Folder(tenant_id=tenant.id, name=folder_name, created_by=admin.id))
     if with_starter_types:
+        for spec in STARTER_OBJECT_TYPES:
+            create_object_type_from_spec(db, tenant.id, spec)
         for spec in STARTER_TYPES:
             create_type_from_spec(db, tenant.id, spec)
 
@@ -213,15 +254,30 @@ def create_type_from_spec(db: Session, tenant_id: uuid.UUID, spec: dict) -> Docu
         icon=spec.get("icon"), requires_validation=spec.get("requires_validation", False),
         classification_hints=spec.get("classification_hints"),
     )
-    for pos, (tech, label, dtype_enum, required) in enumerate(spec["fields"]):
+    for pos, (tech, label, dtype_enum, required, *rest) in enumerate(spec["fields"]):
         dtype.fields.append(MetadataDefinition(
             tenant_id=tenant_id, technical_name=tech, display_name=label, data_type=dtype_enum,
-            required=required, position=pos,
+            required=required, position=pos, validation_rules=rest[0] if rest else {},
+            ai_extraction_enabled=dtype_enum != MetadataDataType.reference,
             requires_human_validation=dtype_enum in (MetadataDataType.currency, MetadataDataType.decimal),
         ))
     db.add(dtype)
     db.flush()
     return dtype
+
+
+def create_object_type_from_spec(db: Session, tenant_id: uuid.UUID, spec: dict) -> ObjectType:
+    otype = ObjectType(tenant_id=tenant_id, code=spec["code"], name=spec["name"], color=spec.get("color"),
+                       icon=spec.get("icon"), description=spec.get("description"))
+    db.add(otype)
+    db.flush()
+    for pos, (tech, label, dtype_enum, required, *rest) in enumerate(spec["fields"]):
+        otype.fields.append(MetadataDefinition(
+            tenant_id=tenant_id, object_type_id=otype.id, technical_name=tech, display_name=label,
+            data_type=dtype_enum, required=required, position=pos, validation_rules=rest[0] if rest else {},
+            sensitive=bool(rest[1]) if len(rest) > 1 else False, ai_extraction_enabled=False))
+    db.flush()
+    return otype
 
 
 def set_status(db: Session, tenant_id: uuid.UUID, status: TenantStatus) -> Tenant:

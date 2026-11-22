@@ -9,6 +9,7 @@ from datetime import datetime
 from sqlalchemy import (
     BigInteger,
     Boolean,
+    CheckConstraint,
     Computed,
     DateTime,
     Enum,
@@ -106,10 +107,18 @@ class DocumentType(UUIDPk, Timestamps, TenantScoped, Base):
 
 class MetadataDefinition(UUIDPk, Timestamps, TenantScoped, Base):
     __tablename__ = "metadata_definitions"
-    __table_args__ = (UniqueConstraint("document_type_id", "technical_name"),)
+    __table_args__ = (
+        UniqueConstraint("document_type_id", "technical_name"),
+        UniqueConstraint("object_type_id", "technical_name"),
+        # A field belongs either to a document type or to a business-object type, never both.
+        CheckConstraint("(document_type_id IS NULL) <> (object_type_id IS NULL)", name="single_owner"),
+    )
 
-    document_type_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("document_types.id", ondelete="CASCADE"), nullable=False, index=True
+    document_type_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("document_types.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    object_type_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("object_types.id", ondelete="CASCADE"), nullable=True, index=True
     )
     technical_name: Mapped[str] = mapped_column(String(80), nullable=False)
     display_name: Mapped[str] = mapped_column(String(120), nullable=False)
@@ -129,7 +138,7 @@ class MetadataDefinition(UUIDPk, Timestamps, TenantScoped, Base):
     requires_human_validation: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
-    document_type: Mapped[DocumentType] = relationship(back_populates="fields")
+    document_type: Mapped[DocumentType | None] = relationship(back_populates="fields")
 
 
 class Document(UUIDPk, Timestamps, TenantScoped, SoftDelete, Base):

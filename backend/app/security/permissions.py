@@ -24,6 +24,11 @@ RESOURCES: dict[str, list[str]] = {
     "prompt": ["create", "read", "update", "delete", "administer"],
     "license": ["read", "administer"],
     "report": ["read"],
+    # Saved document views: every user manages their own; "administer" = shared tenant views.
+    "document_view": ["administer"],
+    # Non-document business objects (suppliers, customers, projects…) and their designer.
+    "object_type": ["create", "read", "update", "delete"],
+    "business_object": ["create", "read", "update", "delete"],
 }
 
 ALL_PERMISSIONS: list[str] = [f"{r}:{a}" for r, actions in RESOURCES.items() for a in actions]
@@ -42,6 +47,7 @@ SYSTEM_ROLES: dict[str, dict[str, object]] = {
         "permissions": sorted(
             set(_READ)
             | {"user:read", "user:create", "user:update", "group:read", "group:update", "role:read"}
+            | {"document_view:administer", "business_object:create", "business_object:update"}
             | {f"document:{a}" for a in RESOURCES["document"]}
             | {f"folder:{a}" for a in RESOURCES["folder"]}
             | {"metadata:update", "metadata:validate"}
@@ -55,7 +61,9 @@ SYSTEM_ROLES: dict[str, dict[str, object]] = {
             | {f"document:{a}" for a in RESOURCES["document"]}
             | {f"folder:{a}" for a in RESOURCES["folder"]}
             | {f"document_type:{a}" for a in RESOURCES["document_type"]}
-            | {"metadata:update", "metadata:validate", "processing:administer"}
+            | {f"object_type:{a}" for a in RESOURCES["object_type"]}
+            | {f"business_object:{a}" for a in RESOURCES["business_object"]}
+            | {"metadata:update", "metadata:validate", "processing:administer", "document_view:administer"}
         ),
     },
     "workflow_manager": {
@@ -68,7 +76,8 @@ SYSTEM_ROLES: dict[str, dict[str, object]] = {
         "description": "Uploads, edits and downloads documents",
         "permissions": sorted(
             set(_READ)
-            | {"document:create", "document:update", "document:download", "folder:create", "metadata:update"}
+            | {"document:create", "document:update", "document:download", "folder:create", "metadata:update",
+               "business_object:create"}
         ),
     },
     "read_only": {

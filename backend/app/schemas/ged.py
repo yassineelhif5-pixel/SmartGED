@@ -144,6 +144,8 @@ class MetadataValueOut(BaseModel):
     validated_at: datetime | None
     sensitive: bool
     required: bool
+    display_value: str | None = None
+    reference_type: str | None = None
 
 
 class DocumentDetail(DocumentOut):

@@ -57,7 +57,8 @@ def list_documents(
     q: str | None = Query(default=None, max_length=300), folder_id: uuid.UUID | None = None,
     recursive: bool = False, document_type_id: uuid.UUID | None = None, status: DocumentStatus | None = None,
     tag: str | None = None, owner_id: uuid.UUID | None = None, created_from: datetime | None = None,
-    created_to: datetime | None = None, trashed: bool = False,
+    created_to: datetime | None = None, trashed: bool = False, mine: bool = False,
+    object_id: uuid.UUID | None = None,
     meta: list[str] = Query(default=[], description="Metadata filters as technical_name:value"),
     sort: Literal["created_at", "updated_at", "title", "file_size", "status", "relevance"] = "created_at",
     order: Literal["asc", "desc"] = "desc", page: int = Query(1, ge=1), page_size: int = Query(25, ge=1, le=200),
@@ -65,8 +66,9 @@ def list_documents(
     metadata_filters = dict(m.split(":", 1) for m in meta if ":" in m)
     items, total = document_service.search_documents(
         db, p.tenant_id, page, page_size, q=q, folder_id=folder_id, recursive=recursive,
-        document_type_id=document_type_id, status=status, tag=tag, owner_id=owner_id, created_from=created_from,
-        created_to=created_to, trashed=trashed, sort=sort, order=order, metadata_filters=metadata_filters,
+        document_type_id=document_type_id, status=status, tag=tag, owner_id=p.user.id if mine else owner_id,
+        created_from=created_from, created_to=created_to, trashed=trashed, sort=sort, order=order,
+        metadata_filters=metadata_filters, object_id=object_id,
     )
     return Page(items=[DocumentOut.model_validate(d) for d in items], total=total, page=page, page_size=page_size)
 
