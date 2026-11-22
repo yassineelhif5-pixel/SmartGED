@@ -56,6 +56,7 @@ DEFAULT_PLANS = [
 DEFAULT_SYSTEM_SETTINGS = {
     "ocr.languages": {"value": "fra+eng", "description": "Default Tesseract languages"},
     "ai.confidence_threshold": {"value": 0.85, "description": "Below this score a field requires human validation"},
+    "ai.business_rules": {"value": "", "description": "Free-text business rules given to the extraction prompt"},
     "documents.retention_days_trash": {"value": 30, "description": "Days before trashed documents may be purged"},
 }
 

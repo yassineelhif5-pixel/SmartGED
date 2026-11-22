@@ -38,7 +38,7 @@ def ready(db: Session = Depends(get_db)) -> dict:
             "storage": settings.storage_provider,
             "ocr": ocr.name if ocr else "not_configured",
             "antivirus": "clamav" if settings.clamav_host else "not_configured",
-            "ai": "not_configured",
+            "ai": "per_tenant",
         },
         "environment": settings.environment,
     }

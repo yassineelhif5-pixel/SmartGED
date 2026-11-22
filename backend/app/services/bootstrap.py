@@ -20,6 +20,9 @@ def bootstrap() -> None:
     settings = get_settings()
     with session_scope(bypass_rls=True) as db:
         tenant_service.ensure_platform_defaults(db)
+        from app.services.ai_service import ensure_default_prompts
+
+        ensure_default_prompts(db)
         for tenant in db.scalars(select(Tenant)).all():
             tenant_service.ensure_system_roles(db, tenant.id)  # propagate new permissions to system roles
         if settings.bootstrap_admin_email and settings.bootstrap_admin_password:

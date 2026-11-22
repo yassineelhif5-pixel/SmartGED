@@ -13,6 +13,7 @@ os.environ["DOCUMIND_SECURE_COOKIES"] = "false"
 os.environ["DOCUMIND_SECRET_KEY"] = "test-secret-key-0123456789-abcdefghijklmnop"
 os.environ["DOCUMIND_STORAGE_LOCAL_ROOT"] = tempfile.mkdtemp(prefix="documind-test-storage-")
 os.environ["DOCUMIND_LOGIN_RATE_LIMIT_PER_MINUTE"] = "1000"
+os.environ["DOCUMIND_AI_RETRY_BASE_SECONDS"] = "0"
 os.environ["DOCUMIND_REDIS_URL"] = "redis://localhost:6379/15"
 os.environ["DOCUMIND_BOOTSTRAP_ADMIN_EMAIL"] = "root@documind.example.com"
 os.environ["DOCUMIND_BOOTSTRAP_ADMIN_PASSWORD"] = "RootPassw0rd!"

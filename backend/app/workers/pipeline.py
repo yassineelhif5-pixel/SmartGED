@@ -5,16 +5,17 @@ per document / version / step). Re-running the pipeline skips completed steps
 unless ``force=True``. Each step runs in its own transaction so progress is
 visible to the UI in real time and a failure never loses earlier work.
 
-Steps (Phase 1-2 scope):
+Steps:
   antivirus → text_extraction (text layer + Tesseract OCR) → language →
-  classification → metadata_extraction → indexing → publication
+  classification (AI) → metadata_extraction (AI) → indexing → publication
 
-Classification / extraction need an AI provider (Phase 3). Until one is
-configured these steps are recorded as ``not_configured`` — never faked.
+The AI steps run through the tenant's configured provider (app.ai). Without one
+they are recorded as ``not_configured`` — never faked.
 """
 
 from __future__ import annotations
 
+import contextvars
 import shutil
 import tempfile
 import time
@@ -35,6 +36,7 @@ from app.security.antivirus import scan_file
 from app.storage.providers import get_storage
 
 log = get_logger(__name__)
+_current_attempt: contextvars.ContextVar[int] = contextvars.ContextVar("pipeline_attempt", default=1)
 
 STEPS = ["antivirus", "text_extraction", "language", "classification", "metadata_extraction", "indexing", "publication"]
 
@@ -114,25 +116,60 @@ def step_language(db: Session, doc: Document, path: Path) -> dict:
     return {"language": doc.language}
 
 
+def _ai_key(doc: Document, step: str) -> str:
+    return f"pipeline:{doc.id}:v{doc.current_version}:{step}:a{_current_attempt.get()}"
+
+
+def _run_ai(doc: Document, step: str, fn: Callable[..., dict], db: Session) -> dict:
+    from app.core.errors import QuotaExceeded
+    from app.services.ai_service import AINotConfigured
+
+    try:
+        return fn(db, doc, key=_ai_key(doc, step))
+    except AINotConfigured as exc:
+        raise StepSkip(StepStatus.not_configured, str(exc)) from exc
+    except QuotaExceeded as exc:
+        raise StepSkip(StepStatus.skipped, exc.message) from exc
+
+
 def step_classification(db: Session, doc: Document, path: Path) -> dict:
+    from app.ai.document_ai import classify
+
     if doc.document_type_id:
         doc.classification_status = StepStatus.completed
         raise StepSkip(StepStatus.skipped, "Document type set by the user")
-    from app.ai.registry import get_active_provider  # Phase 3 module
-
-    if get_active_provider(db, doc.tenant_id) is None:
-        doc.classification_status = StepStatus.not_configured
-        raise StepSkip(StepStatus.not_configured, "No AI provider configured for this tenant")
-    raise StepSkip(StepStatus.not_configured, "AI classification is delivered in Phase 3")
+    if not doc.content_text:
+        raise StepSkip(StepStatus.skipped, "No text to classify")
+    try:
+        result = _run_ai(doc, "classification", classify, db)
+    except StepSkip as skip:
+        doc.classification_status = skip.status
+        raise
+    return result
 
 
 def step_metadata_extraction(db: Session, doc: Document, path: Path) -> dict:
-    from app.ai.registry import get_active_provider
+    from app.ai.document_ai import extract
+    from app.services.ai_service import active_provider
 
-    if get_active_provider(db, doc.tenant_id) is None:
+    if active_provider(db, doc.tenant_id) is None:
         doc.ai_status = StepStatus.not_configured
-        raise StepSkip(StepStatus.not_configured, "No AI provider configured for this tenant")
-    raise StepSkip(StepStatus.not_configured, "AI extraction is delivered in Phase 3")
+        raise StepSkip(StepStatus.not_configured, "No active AI provider configured for this organisation")
+    if doc.document_type_id is None:
+        doc.ai_status = StepStatus.skipped
+        raise StepSkip(StepStatus.skipped, "No document type: classify the document first")
+    if not doc.content_text:
+        doc.ai_status = StepStatus.skipped
+        raise StepSkip(StepStatus.skipped, "No text to analyse")
+    doc.ai_status = StepStatus.running
+    db.flush()
+    try:
+        result = _run_ai(doc, "metadata_extraction", extract, db)
+    except StepSkip as skip:
+        doc.ai_status = skip.status
+        raise
+    doc.ai_status = StepStatus.completed
+    return result
 
 
 def step_indexing(db: Session, doc: Document, path: Path) -> dict:
@@ -141,9 +178,21 @@ def step_indexing(db: Session, doc: Document, path: Path) -> dict:
 
 
 def step_publication(db: Session, doc: Document, path: Path) -> dict:
-    needs_validation = bool(doc.document_type and (
-        doc.document_type.requires_validation
-        or any(f.required or f.requires_human_validation for f in doc.document_type.fields)))
+    from app.models import DocumentMetadataValue
+
+    dtype = doc.document_type
+    if dtype is None and doc.classification_status == StepStatus.pending:
+        # The AI could not classify with enough confidence: a human must pick the type.
+        doc.status = DocumentStatus.pending_validation
+        doc.validation_status = StepStatus.pending
+        return {"status": doc.status.value, "reason": "classification_needed"}
+    must = [f for f in dtype.fields if f.required or f.requires_human_validation] if dtype else []
+    needs_validation = bool(dtype and (dtype.requires_validation or must))
+    if needs_validation and must:
+        rows = {v.definition_id: v for v in db.scalars(
+            select(DocumentMetadataValue).where(DocumentMetadataValue.document_id == doc.id))}
+        if all((r := rows.get(f.id)) is not None and r.validation_status == StepStatus.completed for f in must):
+            needs_validation = False  # already confirmed by a human (re-analysis)
     if needs_validation:
         doc.status = DocumentStatus.pending_validation
         doc.validation_status = StepStatus.pending
@@ -164,7 +213,8 @@ STEP_FUNCS: dict[str, Callable[[Session, Document, Path], dict]] = {
 }
 
 
-def run_pipeline(tenant_id: uuid.UUID, document_id: uuid.UUID, *, force: bool = False) -> dict[str, str]:
+def run_pipeline(tenant_id: uuid.UUID, document_id: uuid.UUID, *, force: bool = False,
+                 only_steps: list[str] | None = None) -> dict[str, str]:
     tenant_id_var.set(str(tenant_id))
     summary: dict[str, str] = {}
     with session_scope(tenant_id=tenant_id) as db:
@@ -184,6 +234,8 @@ def run_pipeline(tenant_id: uuid.UUID, document_id: uuid.UUID, *, force: bool = 
             path = _materialise(doc, workdir)
 
         for step in STEPS:
+            if only_steps is not None and step not in only_steps:
+                continue
             with session_scope(tenant_id=tenant_id) as db:
                 doc = db.get(Document, document_id)
                 assert doc is not None
@@ -198,6 +250,7 @@ def run_pipeline(tenant_id: uuid.UUID, document_id: uuid.UUID, *, force: bool = 
                 db.flush()
                 started = time.perf_counter()
                 try:
+                    _current_attempt.set(job.attempts)
                     job.result = STEP_FUNCS[step](db, doc, path)
                     job.status = StepStatus.completed
                 except StepSkip as skip:
@@ -239,3 +292,5 @@ def _record_failure(tenant_id: uuid.UUID, document_id: uuid.UUID, step: str, exc
         doc.status = DocumentStatus.failed
         if step == "text_extraction":
             doc.ocr_status = StepStatus.failed
+        elif step == "metadata_extraction":
+            doc.ai_status = StepStatus.failed

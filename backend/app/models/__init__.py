@@ -1,5 +1,15 @@
 """Import every model so Alembic and the mapper registry see the full schema."""
 
+from app.models.ai import (
+    AIModelPrice,
+    AIPrompt,
+    AIPromptTest,
+    AIPromptVersion,
+    AIProvider,
+    AIUsageEvent,
+    PromptStatus,
+    ProviderKind,
+)
 from app.models.audit import AuditLog, Notification
 from app.models.ged import (
     Document,
@@ -48,5 +58,6 @@ __all__ = [
     "PlatformRole", "Role", "RolePermission", "User", "UserRole", "UserSession", "UserTenant",
     "SubscriptionPlan", "SystemSetting", "Tenant", "TenantModule", "TenantQuota", "TenantSetting",
     "TenantStatus", "BusinessObject", "DocumentObjectLink", "ObjectStatus", "ObjectType", "DocumentView",
-    "UserPreference", "ViewScope",
+    "UserPreference", "ViewScope", "AIModelPrice", "AIPrompt", "AIPromptTest", "AIPromptVersion", "AIProvider",
+    "AIUsageEvent", "PromptStatus", "ProviderKind",
 ]

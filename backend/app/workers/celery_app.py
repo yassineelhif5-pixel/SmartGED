@@ -36,11 +36,12 @@ def _setup(**_: object) -> None:
 
 
 @celery_app.task(name="documind.process_document", bind=True, max_retries=3, acks_late=True)
-def process_document(self, tenant_id: str, document_id: str, force: bool = False) -> dict:  # type: ignore[no-untyped-def]
+def process_document(self, tenant_id: str, document_id: str, force: bool = False,  # type: ignore[no-untyped-def]
+                     only_steps: list[str] | None = None) -> dict:
     from app.workers.pipeline import run_pipeline
 
     try:
-        return run_pipeline(uuid.UUID(tenant_id), uuid.UUID(document_id), force=force)
+        return run_pipeline(uuid.UUID(tenant_id), uuid.UUID(document_id), force=force, only_steps=only_steps)
     except Exception as exc:  # infrastructure failure (DB down, storage unreachable…)
         if self.request.retries >= self.max_retries:
             dead_letter.apply_async(args=[tenant_id, document_id, repr(exc)], queue="dead_letter")
@@ -53,8 +54,9 @@ def dead_letter(tenant_id: str, document_id: str, error: str) -> None:
     log.error("pipeline_dead_letter", extra={"tenant_id": tenant_id, "document_id": document_id, "error": error})
 
 
-def enqueue_processing(tenant_id: uuid.UUID, document_id: uuid.UUID, *, force: bool = False, priority: bool = False) -> None:
+def enqueue_processing(tenant_id: uuid.UUID, document_id: uuid.UUID, *, force: bool = False, priority: bool = False,
+                       only_steps: list[str] | None = None) -> None:
     process_document.apply_async(
-        args=[str(tenant_id), str(document_id), force],
+        args=[str(tenant_id), str(document_id), force, only_steps],
         queue="documents_priority" if priority else "documents",
     )

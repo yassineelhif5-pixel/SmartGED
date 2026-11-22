@@ -71,6 +71,14 @@ class Settings(BaseSettings):
     clamav_host: str | None = None
     clamav_port: int = 3310
 
+    # --- AI ---------------------------------------------------------------
+    # Key encrypting tenant AI provider secrets (Fernet, urlsafe base64 32 bytes).
+    # If unset, a key is derived from DOCUMIND_SECRET_KEY (rotate both together).
+    encryption_key: str | None = None
+    ai_max_retries: int = 3
+    ai_retry_base_seconds: float = 1.0
+    ai_max_document_chars: int = 60_000
+
     # --- Bootstrap ---------------------------------------------------------
     bootstrap_admin_email: str | None = None
     bootstrap_admin_password: str | None = None
