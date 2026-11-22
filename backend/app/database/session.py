@@ -38,6 +38,7 @@ def get_engine() -> Engine:
             max_overflow=settings.db_max_overflow,
             pool_pre_ping=True,
             future=True,
+            connect_args=settings.db_connect_args,
         )
         _SessionFactory = sessionmaker(bind=_engine, expire_on_commit=False, autoflush=False)
     return _engine

@@ -2,7 +2,7 @@
 
 Plateforme SaaS de GED intelligente, multi-tenant et AI-native.
 
-> **État : v0.2 — Phases 1 (Fondations) et 2 (GED cœur) livrées et testées.**
+> **État : v0.3 — Phases 1-2 + vues de documents partagées/personnelles + référentiels (objets métier).**
 > Voir [`PROJECT_STATUS.md`](PROJECT_STATUS.md) pour le détail et la suite.
 
 ## Ce qui fonctionne aujourd'hui
@@ -15,11 +15,17 @@ Plateforme SaaS de GED intelligente, multi-tenant et AI-native.
 - **Types documentaires & Metadata Designer** : 11 types de champs, règles de validation, champs sensibles, schémas versionnés.
 - **Validation humaine** : champs obligatoires / financiers à confirmer avant publication.
 - **Recherche** plein texte (titre, nom de fichier, contenu OCR) avec pertinence, filtres, tri, pagination.
+- **Vues de documents** : l'administrateur configure et partage des filtres (dont une vue par défaut pour toute l'organisation) ; chaque utilisateur enregistre ses propres vues et choisit sa vue par défaut.
+- **Référentiels (objets métier)** : éléments non documentaires configurables (fournisseurs, clients, projets…) liés aux documents, utilisés comme propriétés de référence et pour **alimenter automatiquement les métadonnées** (ex. choisir le fournisseur d'une facture remplit nom et TVA).
 - **Audit infalsifiable** : journal append-only (trigger PostgreSQL) chaîné par hachage, vérification d'intégrité, export CSV.
 - **Pilot (Super Admin)** : provisioning de tenants en une action, plans, quotas, suspension / réactivation.
 - **Interface** React professionnelle, thème clair/sombre, entièrement connectée à l'API.
 
 Les modules IA (classification, extraction, Lina, RAG), workflows et connecteurs sont planifiés (phases 3 à 9). Tant qu'ils ne sont pas livrés, l'interface et le pipeline affichent explicitement « non configuré » — rien n'est simulé.
+
+## Base de données Supabase
+
+Voir [`supabase/README.md`](supabase/README.md) : schéma dédié `smartged`, rôle applicatif sans contournement RLS, migrations SQL prêtes.
 
 ## Démarrage rapide (Docker)
 
@@ -61,7 +67,7 @@ npm run dev                                          # → http://localhost:5173
 ## Tests
 
 ```bash
-cd backend && pytest -q          # 27 tests : auth, RBAC, isolation inter-tenant (API + RLS), OCR réel, GED
+cd backend && pytest -q          # 36 tests : auth, RBAC, isolation inter-tenant (API + RLS), OCR réel, GED, vues, référentiels
 cd frontend && npm test          # Vitest
 ```
 

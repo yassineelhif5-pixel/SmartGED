@@ -25,6 +25,9 @@ class Settings(BaseSettings):
 
     # --- Database ----------------------------------------------------------
     database_url: str = "postgresql+psycopg://documind:documind@localhost:5432/documind"
+    # Optional dedicated PostgreSQL schema (e.g. "smartged" on a shared Supabase project).
+    # Every table, enum and the alembic_version table live in it; search_path is set per connection.
+    db_schema: str | None = Field(default=None, pattern=r"^[a-z_][a-z0-9_]{0,62}$")
     db_pool_size: int = 10
     db_max_overflow: int = 20
 
@@ -82,6 +85,10 @@ class Settings(BaseSettings):
                 return json.loads(v)
             return [item.strip() for item in v.split(",") if item.strip()]
         return v
+
+    @property
+    def db_connect_args(self) -> dict[str, str]:
+        return {"options": f"-csearch_path={self.db_schema},public"} if self.db_schema else {}
 
     @property
     def broker_url(self) -> str:

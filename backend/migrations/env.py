@@ -3,7 +3,7 @@
 from logging.config import fileConfig
 
 from alembic import context
-from sqlalchemy import engine_from_config, pool
+from sqlalchemy import engine_from_config, pool, text
 
 from app.core.config import get_settings
 from app.database.base import Base
@@ -13,22 +13,32 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-config.set_main_option("sqlalchemy.url", get_settings().database_url.replace("%", "%%"))
+settings = get_settings()
+config.set_main_option("sqlalchemy.url", settings.database_url.replace("%", "%%"))
 target_metadata = Base.metadata
+SCHEMA = settings.db_schema
 
 
 def run_migrations_offline() -> None:
     context.configure(url=config.get_main_option("sqlalchemy.url"), target_metadata=target_metadata,
-                      literal_binds=True, compare_type=True)
+                      literal_binds=True, compare_type=True, version_table_schema=SCHEMA)
     with context.begin_transaction():
+        if SCHEMA:
+            context.execute(f"CREATE SCHEMA IF NOT EXISTS {SCHEMA}")
+            context.execute(f"SET search_path TO {SCHEMA}, public")
         context.run_migrations()
 
 
 def run_migrations_online() -> None:
     connectable = engine_from_config(config.get_section(config.config_ini_section, {}),
-                                     prefix="sqlalchemy.", poolclass=pool.NullPool)
+                                     prefix="sqlalchemy.", poolclass=pool.NullPool,
+                                     connect_args=settings.db_connect_args)
     with connectable.connect() as connection:
-        context.configure(connection=connection, target_metadata=target_metadata, compare_type=True)
+        if SCHEMA:
+            connection.execute(text(f"CREATE SCHEMA IF NOT EXISTS {SCHEMA}"))
+            connection.commit()
+        context.configure(connection=connection, target_metadata=target_metadata, compare_type=True,
+                          version_table_schema=SCHEMA)
         with context.begin_transaction():
             context.run_migrations()
 
