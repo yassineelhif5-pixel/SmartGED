@@ -160,7 +160,7 @@ export function RelationsPanel({ doc }: { doc: DocumentDetail }) {
             <Link2 className="size-4 text-muted-foreground" />
             <div className="min-w-0 flex-1">
               <div className="truncate text-sm font-medium">{r.document.title}</div>
-              <div className="text-xs text-muted-foreground">{r.relation_type} · {r.direction === "outgoing" ? "sortante" : "entrante"}</div>
+              <div className="text-xs text-muted-foreground">{relationLabel(r.relation_type, r.direction)}</div>
             </div>
           </Link>
         </li>
@@ -200,4 +200,18 @@ export function InfoPanel({ doc }: { doc: DocumentDetail }) {
       )}
     </dl>
   );
+}
+
+const RELATION_LABELS: Record<string, [string, string]> = {
+  split_into: ["Document extrait du lot", "Lot d'origine"],
+  copied_to: ["Copie", "Original"],
+  parent_of: ["Document enfant", "Document parent"],
+  replaces: ["Remplace", "Remplacé par"],
+  related: ["Lié", "Lié"],
+};
+
+function relationLabel(type: string, direction: string) {
+  const pair = RELATION_LABELS[type];
+  if (pair) return direction === "outgoing" ? pair[0] : pair[1];
+  return `${type} · ${direction === "outgoing" ? "sortante" : "entrante"}`;
 }

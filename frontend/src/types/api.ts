@@ -403,3 +403,39 @@ export interface AIUsage {
   by_model: UsageGroup[];
   per_day: { date: string; credits: number }[];
 }
+
+// ------------------------------------------------------------ document splitting
+export interface SplitSegment {
+  start_page: number;
+  end_page: number;
+  title: string | null;
+  document_type_code?: string | null;
+  document_type_id?: UUID | null;
+  confidence?: number | null;
+  reasons?: string[];
+}
+
+export interface SplitProposal {
+  id: UUID;
+  status: "proposed" | "applied" | "dismissed" | "superseded";
+  method: "heuristic" | "ai" | "manual";
+  version_number: number;
+  page_count: number;
+  segments: SplitSegment[];
+  separator_pages: number[];
+  confidence: number | null;
+  details: { ai?: { status?: string; error?: string; model?: string; credits?: number } } & Record<string, unknown>;
+  decided_at: string | null;
+  child_document_ids: UUID[];
+  created_at: string;
+}
+
+export interface SplitState {
+  document_id: UUID;
+  splittable: boolean;
+  page_count: number | null;
+  status: DocumentStatus;
+  parent_document_id: UUID | null;
+  proposal: SplitProposal | null;
+  pages: { page_number: number; excerpt: string; chars: number }[];
+}

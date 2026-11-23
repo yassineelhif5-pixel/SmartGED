@@ -33,6 +33,21 @@ Ajouter un fournisseur (Azure AI Document Intelligence, Google Document AI, AWS 
 
 Garde-fous anti-hallucination : `null` exigé si absent, revalidation par les règles du champ, texte source vérifié dans l'OCR (confiance divisée par 2 sinon), valeurs manuelles/validées/issues d'un référentiel jamais écrasées, document encadré par `<document>` et neutralisé contre l'injection de consignes, validation humaine obligatoire des champs obligatoires et financiers.
 
+### Découpage des lots (Document Splitting Engine)
+
+Après la détection de langue, un PDF de plusieurs pages passe par l'étape `splitting` :
+
+- **Analyse de structure** (toujours active, sans IA) : numérotation « Page 1/N » qui repart, en-têtes avec numéro (« FACTURE N° … », « BON DE COMMANDE … »), changement de référence, pages blanches de séparation. Une page « 2/3 » n'ouvre jamais un document.
+- **IA** (si un fournisseur est configuré) : prompt `document_splitting` modifiable dans le Prompt Studio. Une réponse incohérente (chevauchement, pages hors limites) est rejetée et l'analyse de structure prend le relais.
+
+Si plusieurs documents sont détectés, le traitement s'arrête en « À valider » jusqu'à la revue (Document → « Vérifier le découpage »). Paramètres d'organisation :
+
+| Clé | Défaut | Effet |
+|---|---|---|
+| `splitting.enabled` | `true` | Désactive l'étape |
+| `splitting.ai_enabled` | `true` | Analyse de structure seule |
+| `splitting.auto_apply_threshold` | absent | Applique sans revue si la confiance minimale des coupures atteint ce seuil |
+
 ### Prompt Studio
 
 Consignes plateforme (v1) pour `classification`, `metadata_extraction`, `document_summary`. Une organisation crée ses versions, les **teste sur un vrai document** (tokens, latence, coût), puis les publie (publication refusée sans test réussi, sauf `force`, tracé dans l'audit). « Revenir à la plateforme » annule la personnalisation.

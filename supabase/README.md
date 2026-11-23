@@ -8,12 +8,13 @@ La base SmartGED vit dans un schéma PostgreSQL dédié **`smartged`** :
 
 ## 1. Créer la structure
 
-Trois migrations, à appliquer dans l'ordre (SQL editor Supabase, `supabase db push` ou MCP) :
+Quatre migrations, à appliquer dans l'ordre (SQL editor Supabase, `supabase db push` ou MCP) :
 
 | Fichier | Contenu |
 |---|---|
 | `migrations/20261122000100_smartged_schema.sql` | 39 tables, enums, index, politiques RLS, trigger d'audit append-only, `alembic_version` = `0004` |
 | `migrations/20261122000200_smartged_app_role.sql` | rôle `smartged_app` (NOBYPASSRLS), droits, révocation `anon` / `authenticated` |
+| `migrations/20261123000200_smartged_document_splitting.sql` | rév. `0006` : table `document_split_proposals` (RLS forcée) |
 | `migrations/20261123000100_smartged_rls_perf_fk_indexes.sql` | rév. `0005` : politiques RLS réécrites avec `(select current_setting(...))` (évaluées une fois par requête), 21 index sur clés étrangères |
 
 Ces fichiers sont générés depuis Alembic (`DOCUMIND_DB_SCHEMA=smartged alembic upgrade head --sql`) : Alembic reste la source de vérité, les migrations suivantes s'appliquent avec `alembic upgrade head`.
@@ -53,6 +54,6 @@ python -m app.cli create-tenant --name "Mon entreprise" --slug mon-entreprise \
 
 ## État du projet `gfndyqtkvfcdmnpugwdk` (23/11/2026)
 
-- Migrations 0001 → 0005 appliquées, rôle `smartged_app` créé (login à activer par vous).
+- Migrations 0001 → 0006 appliquées (40 tables), rôle `smartged_app` créé (login à activer par vous).
 - Isolation vérifiée en tant que `smartged_app` : le tenant A voit sa ligne, B ne voit rien de A, sans tenant aucune ligne, écriture inter-tenant bloquée, audit immuable.
 - Advisors sécurité : aucun problème. Advisors performance : seuls des avis « index pas encore utilisé » (base vide).

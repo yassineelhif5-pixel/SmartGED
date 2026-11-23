@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Download, Lock, MoreHorizontal, Pencil, RotateCcw, Trash2, Unlock, XCircle } from "lucide-react";
+import { ArrowLeft, Download, Lock, MoreHorizontal, Pencil, RotateCcw, Scissors, Trash2, Unlock, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { api, downloadFile } from "@/api/client";
 import { useDocument, useDocumentTypes, useFolders, useInvalidateDocs } from "@/hooks/queries";
@@ -13,6 +13,7 @@ import { Preview } from "@/features/viewer/Preview";
 import { MetadataPanel } from "@/features/viewer/MetadataPanel";
 import { ObjectsPanel } from "@/features/viewer/ObjectsPanel";
 import { AIBar } from "@/features/viewer/AIBar";
+import { SplitBanner } from "@/features/splitting/SplitBanner";
 import { InfoPanel, ProcessingPanel, RelationsPanel, TextPanel, VersionsPanel } from "@/features/viewer/Panels";
 
 const TABS = [
@@ -141,6 +142,12 @@ export default function DocumentViewerPage() {
                         <Unlock /> Libérer (check-in)
                       </DropdownItem>
                     )}
+                    {can("document:create") && doc.mime_type === "application/pdf" && (doc.page_count ?? 0) > 1
+                      && !doc.parent_document_id && doc.status !== "archived" && (
+                      <DropdownItem onSelect={() => navigate(`/documents/${doc.id}/split`)}>
+                        <Scissors /> Découper le PDF
+                      </DropdownItem>
+                    )}
                     {can("document:validate") && doc.status === "pending_validation" && (
                       <DropdownItem onSelect={() => run(() => api(`/documents/${doc.id}/reject`, { method: "POST" }), "Document rejeté")}>
                         <XCircle /> Rejeter
@@ -162,6 +169,7 @@ export default function DocumentViewerPage() {
         </div>
       </div>
 
+      {!doc.deleted_at && <SplitBanner doc={doc} />}
       {!doc.deleted_at && <AIBar doc={doc} />}
       <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(0,1fr)_420px]">
         <Card className="min-h-[50vh] overflow-hidden">

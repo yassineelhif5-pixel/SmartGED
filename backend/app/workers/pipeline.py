@@ -7,7 +7,7 @@ visible to the UI in real time and a failure never loses earlier work.
 
 Steps:
   antivirus → text_extraction (text layer + Tesseract OCR) → language →
-  classification (AI) → metadata_extraction (AI) → indexing → publication
+  splitting (multi-document PDF detection; pauses for human review) → classification (AI) → metadata_extraction (AI) → indexing → publication
 
 The AI steps run through the tenant's configured provider (app.ai). Without one
 they are recorded as ``not_configured`` — never faked.
@@ -38,7 +38,7 @@ from app.storage.providers import get_storage
 log = get_logger(__name__)
 _current_attempt: contextvars.ContextVar[int] = contextvars.ContextVar("pipeline_attempt", default=1)
 
-STEPS = ["antivirus", "text_extraction", "language", "classification", "metadata_extraction", "indexing", "publication"]
+STEPS = ["antivirus", "text_extraction", "language", "splitting", "classification", "metadata_extraction", "indexing", "publication"]
 
 
 class StepSkip(Exception):
@@ -50,6 +50,15 @@ class StepSkip(Exception):
 
 class PipelineHalt(Exception):
     """Stop the pipeline (e.g. infected file); not a technical failure."""
+
+
+class PipelinePause(Exception):
+    """The step completed but a human decision is needed before the next steps (e.g. split review)."""
+
+    def __init__(self, result: dict, reason: str) -> None:
+        super().__init__(reason)
+        self.result = result
+        self.reason = reason
 
 
 def _job(db: Session, doc: Document, step: str) -> ProcessingJob:
@@ -114,6 +123,34 @@ def step_language(db: Session, doc: Document, path: Path) -> dict:
         raise StepSkip(StepStatus.skipped, "No text available")
     doc.language = detect_language(doc.content_text)
     return {"language": doc.language}
+
+
+def step_splitting(db: Session, doc: Document, path: Path) -> dict:
+    from app.services import split_service
+    from app.services.ai_service import get_setting
+
+    if doc.parent_document_id is not None:
+        raise StepSkip(StepStatus.skipped, "Child of a split document")
+    if not split_service.is_splittable(doc):
+        raise StepSkip(StepStatus.skipped, "Single-page or non-PDF document")
+    if not bool(get_setting(db, doc.tenant_id, "splitting.enabled", True)):
+        raise StepSkip(StepStatus.skipped, "Splitting disabled for this organisation")
+    detection = split_service.detect(db, doc, key=_ai_key(doc, "splitting"))
+    proposal = split_service.save_proposal(db, doc, detection)
+    result = {"method": detection.method, "segments": len(detection.segments), "confidence": detection.confidence,
+              "separator_pages": detection.separator_pages, "proposal_id": str(proposal.id),
+              "ai": detection.details.get("ai")}
+    if not detection.is_multi:
+        return result
+    threshold = get_setting(db, doc.tenant_id, "splitting.auto_apply_threshold", None)
+    if threshold is not None and detection.confidence is not None and detection.confidence >= float(threshold):
+        children = split_service.apply_split(db, doc, user_id=None, segments=detection.segments, proposal=proposal)
+        result["auto_applied"] = True
+        result["children"] = [str(c.id) for c in children]
+        raise PipelinePause(result, "auto_split")
+    doc.status = DocumentStatus.pending_validation
+    doc.validation_status = StepStatus.pending
+    raise PipelinePause(result, "split_review")
 
 
 def _ai_key(doc: Document, step: str) -> str:
@@ -206,6 +243,7 @@ STEP_FUNCS: dict[str, Callable[[Session, Document, Path], dict]] = {
     "antivirus": step_antivirus,
     "text_extraction": step_text_extraction,
     "language": step_language,
+    "splitting": step_splitting,
     "classification": step_classification,
     "metadata_extraction": step_metadata_extraction,
     "indexing": step_indexing,
@@ -222,6 +260,8 @@ def run_pipeline(tenant_id: uuid.UUID, document_id: uuid.UUID, *, force: bool = 
         if doc is None:
             log.warning("pipeline_document_missing", extra={"document_id": str(document_id)})
             return {"error": "document_not_found"}
+        if doc.status == DocumentStatus.archived:
+            return {"skipped": "archived"}  # e.g. a parent that was split into child documents
         doc.status = DocumentStatus.processing
         for step in STEPS:
             _job(db, doc, step)
@@ -256,6 +296,19 @@ def run_pipeline(tenant_id: uuid.UUID, document_id: uuid.UUID, *, force: bool = 
                 except StepSkip as skip:
                     job.status = skip.status
                     job.result = {"reason": skip.reason}
+                except PipelinePause as pause:
+                    job.status = StepStatus.completed
+                    job.result = pause.result
+                    summary[step] = pause.reason
+                    _finish(job, started)
+                    children = pause.result.get("children") or []
+                    if children:
+                        db.commit()
+                        from app.workers.celery_app import enqueue_processing
+
+                        for child in children:
+                            enqueue_processing(tenant_id, uuid.UUID(child))
+                    return summary
                 except PipelineHalt as halt:
                     job.status = StepStatus.failed
                     job.error = str(halt)

@@ -54,6 +54,28 @@ DEFAULT_PROMPTS: list[dict] = [
         ),
     },
     {
+        "code": "document_splitting",
+        "name": "Découpage de lots multi-documents",
+        "category": "Document Splitting",
+        "description": "Repère où commence chaque document dans un PDF qui en contient plusieurs (lot scanné).",
+        "variables": ["document_content", "page_count", "document_types", "file_name"],
+        "system_prompt": (
+            "Tu es Lina, experte en numérisation de lots documentaires. Tu repères les frontières entre "
+            "documents distincts dans un PDF scanné. " + GUARD +
+            " Une suite de pages d'un même document (pages 2/3, conditions générales, annexes) reste "
+            "dans le même segment. Les pages vides de séparation sont exclues des segments."
+        ),
+        "user_template": (
+            "Fichier : {{file_name}}\nNombre de pages : {{page_count}}\n\n"
+            "Types documentaires possibles (code — nom) :\n{{document_types}}\n\n"
+            "Extrait de chaque page, précédé du marqueur [[page N]] :\n"
+            "<document>\n{{document_content}}\n</document>\n\n"
+            "Réponds avec ce JSON, segments dans l'ordre des pages, sans chevauchement :\n"
+            '{"documents": [{"start_page": <n>, "end_page": <n>, "document_type": "<code ou null>", '
+            '"title": "<titre court ou null>", "confidence": <0 à 1>, "reason": "<indice de début>"}]}'
+        ),
+    },
+    {
         "code": "document_summary",
         "name": "Résumé de document",
         "category": "Document Summary",

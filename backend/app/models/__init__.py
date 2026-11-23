@@ -40,6 +40,7 @@ from app.models.identity import (
     UserTenant,
 )
 from app.models.objects import BusinessObject, DocumentObjectLink, ObjectStatus, ObjectType
+from app.models.splitting import DocumentSplitProposal, SplitStatus
 from app.models.tenant import (
     SubscriptionPlan,
     SystemSetting,
@@ -52,6 +53,7 @@ from app.models.tenant import (
 from app.models.views import DocumentView, UserPreference, ViewScope
 
 __all__ = [
+    "DocumentSplitProposal", "SplitStatus",
     "AuditLog", "Notification", "Document", "DocumentMetadataValue", "DocumentRelation", "DocumentStatus",
     "DocumentTag", "DocumentType", "DocumentVersion", "Folder", "MetadataDataType", "MetadataDefinition",
     "OcrPage", "ProcessingJob", "StepStatus", "Group", "GroupMember", "MembershipStatus", "Permission",
