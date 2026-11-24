@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { CheckCircle2, CircleSlash, FlaskConical, KeyRound, Pencil, Plug, Plus, RotateCcw, Rocket, Star, Trash2, XCircle } from "lucide-react";
+import { CheckCircle2, CircleSlash, FlaskConical, KeyRound, Pencil, Plug, Plus, RefreshCw, RotateCcw, Rocket, Star, Trash2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/api/client";
 import { useDocuments } from "@/hooks/queries";
 import { useCan } from "@/stores/session";
-import type { AIProviderT, AIUsage, Prompt, PromptTestResult, PromptVersion, ProviderKind } from "@/types/api";
+import type { AIProviderT, AIUsage, LinaStatus, Prompt, PromptTestResult, PromptVersion, ProviderKind } from "@/types/api";
 import { cn, formatDateTime, timeAgo } from "@/utils/format";
 import { Badge, Button, Card, CardHeader, EmptyState, Field, Input, PageHeader, Select, Switch, Textarea } from "@/components/ui/primitives";
 import { ConfirmDialog, Dialog } from "@/components/ui/overlay";
@@ -42,7 +42,7 @@ export default function AIPage() {
 // ---------------------------------------------------------------- providers
 type ProviderForm = {
   id?: string; name: string; kind: ProviderKind; base_url: string; api_version: string; api_key: string; key_set: boolean;
-  default_model: string; temperature: string; max_tokens: number; timeout_seconds: number; is_active: boolean; is_default: boolean; fallback_provider_id: string;
+  default_model: string; embedding_model: string; temperature: string; max_tokens: number; timeout_seconds: number; is_active: boolean; is_default: boolean; fallback_provider_id: string;
 };
 
 function Providers() {
@@ -58,9 +58,9 @@ function Providers() {
 
   const open = (p?: AIProviderT) => setForm(p
     ? { id: p.id, name: p.name, kind: p.kind, base_url: p.base_url ?? "", api_version: p.api_version ?? "", api_key: "", key_set: p.api_key_set,
-        default_model: p.default_model, temperature: p.temperature === null ? "" : String(p.temperature), max_tokens: p.max_tokens,
+        default_model: p.default_model, embedding_model: p.embedding_model ?? "", temperature: p.temperature === null ? "" : String(p.temperature), max_tokens: p.max_tokens,
         timeout_seconds: p.timeout_seconds, is_active: p.is_active, is_default: p.is_default, fallback_provider_id: p.fallback_provider_id ?? "" }
-    : { name: "", kind: "anthropic", base_url: "", api_version: "", api_key: "", key_set: false, default_model: "", temperature: "", max_tokens: 2048,
+    : { name: "", kind: "anthropic", base_url: "", api_version: "", api_key: "", key_set: false, default_model: "", embedding_model: "", temperature: "", max_tokens: 2048,
         timeout_seconds: 60, is_active: true, is_default: providers.length === 0, fallback_provider_id: "" });
 
   const save = async () => {
@@ -69,7 +69,7 @@ function Providers() {
     try {
       const body = {
         name: form.name, kind: form.kind, base_url: form.base_url || null, api_version: form.api_version || null,
-        api_key: form.api_key || null, default_model: form.default_model, temperature: form.temperature === "" ? null : Number(form.temperature),
+        api_key: form.api_key || null, default_model: form.default_model, embedding_model: form.embedding_model || null, temperature: form.temperature === "" ? null : Number(form.temperature),
         max_tokens: form.max_tokens, timeout_seconds: form.timeout_seconds, is_active: form.is_active, is_default: form.is_default,
         fallback_provider_id: form.fallback_provider_id || null,
       };
@@ -104,6 +104,7 @@ function Providers() {
         <p className="text-sm text-muted-foreground">Les clés API sont chiffrées en base et ne sont jamais renvoyées au navigateur.</p>
         {admin && <Button onClick={() => open()}><Plus /> Ajouter un fournisseur</Button>}
       </div>
+      <KnowledgeIndex admin={can("processing:administer")} />
       {!isLoading && providers.length === 0 ? (
         <Card><EmptyState icon={Plug} title="Aucun fournisseur IA configuré"
                           description="Sans fournisseur, la classification et l'extraction restent « non configurées » : rien n'est simulé. Ajoutez une clé API pour activer l'intelligence documentaire."
@@ -119,7 +120,7 @@ function Providers() {
                     {p.is_default && <Badge tone="blue"><Star className="size-3" /> par défaut</Badge>}
                     {!p.is_active && <Badge tone="neutral">inactif</Badge>}
                   </div>
-                  <p className="mt-0.5 text-xs text-muted-foreground">{kindLabel(p.kind)} · <span className="font-mono">{p.default_model}</span></p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{kindLabel(p.kind)} · <span className="font-mono">{p.default_model}</span>{p.embedding_model && <> · embeddings <span className="font-mono">{p.embedding_model}</span></>}</p>
                 </div>
                 {admin && (
                   <div className="flex gap-1">
@@ -157,6 +158,11 @@ function Providers() {
               </Select>
             </Field>
             <Field label="Modèle" hint={spec?.hint}><Input className="font-mono text-xs" value={form.default_model} onChange={(e) => setForm({ ...form, default_model: e.target.value })} /></Field>
+            <Field label="Modèle d'embeddings (recherche sémantique)"
+                   hint={form.kind === "anthropic" ? "Anthropic ne fournit pas d'embeddings : utilisez un autre fournisseur" : "ex. text-embedding-3-small, nomic-embed-text — vide = pas de recherche sémantique"}>
+              <Input className="font-mono text-xs" disabled={form.kind === "anthropic"} value={form.embedding_model}
+                     onChange={(e) => setForm({ ...form, embedding_model: e.target.value })} />
+            </Field>
             <Field label={`Clé API${spec?.key ? "" : " (facultative)"}`} hint={form.key_set ? "Laisser vide pour conserver la clé actuelle" : undefined}>
               <div className="relative">
                 <KeyRound className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -404,5 +410,36 @@ function Usage() {
       </div>
       <p className="text-xs text-muted-foreground">1 crédit = 0,001 $ de coût estimé ; sans tarif configuré pour un modèle, 1 crédit par tranche de 1 000 tokens. Mis à jour {formatDateTime(new Date().toISOString())}.</p>
     </div>
+  );
+}
+
+function KnowledgeIndex({ admin }: { admin: boolean }) {
+  const { data: st, refetch } = useQuery({ queryKey: ["lina-status"], queryFn: () => api<LinaStatus>("/lina/status") });
+  const [busy, setBusy] = useState(false);
+  if (!st) return null;
+  const pct = st.chunks ? Math.round((st.embedded_chunks / st.chunks) * 100) : 0;
+  const reindex = async () => {
+    setBusy(true);
+    try {
+      const r = await api<{ queued: number }>("/ai/reindex", { method: "POST" });
+      toast.success(`${r.queued} document(s) en cours de réindexation`);
+      setTimeout(() => refetch(), 2500);
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Card className="mb-4 flex flex-wrap items-center gap-x-6 gap-y-2 px-5 py-3 text-sm">
+      <span className="font-medium">Index de connaissances</span>
+      <span className="text-muted-foreground"><strong className="tabular text-foreground">{st.indexed_documents}</strong> documents · <strong className="tabular text-foreground">{st.chunks}</strong> passages</span>
+      {st.semantic_configured ? (
+        <span className="text-muted-foreground">Sémantique : <strong className="tabular text-foreground">{pct} %</strong> vectorisé ({st.embedding_model})</span>
+      ) : (
+        <span className="text-muted-foreground">Recherche sémantique non configurée — renseignez un modèle d'embeddings sur un fournisseur. La recherche par mots-clés reste active.</span>
+      )}
+      {admin && <Button size="sm" variant="outline" className="ml-auto h-7" loading={busy} onClick={reindex}><RefreshCw /> Réindexer</Button>}
+    </Card>
   );
 }

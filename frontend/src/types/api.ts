@@ -339,6 +339,7 @@ export interface AIProviderT {
   api_key_set: boolean;
   api_key_hint: string | null;
   default_model: string;
+  embedding_model: string | null;
   temperature: number | null;
   max_tokens: number;
   timeout_seconds: number;
@@ -438,4 +439,28 @@ export interface SplitState {
   parent_document_id: UUID | null;
   proposal: SplitProposal | null;
   pages: { page_number: number; excerpt: string; chars: number }[];
+}
+
+// ------------------------------------------------------------ phase 4: search & Lina
+export interface SearchHit {
+  document: DocumentSummary;
+  score: number;
+  match: "keyword" | "semantic" | "both";
+  passage: string | null;
+  page_from: number | null;
+  page_to: number | null;
+  similarity: number | null;
+}
+export interface SearchResponse { query: string; semantic: string; semantic_detail: string | null; hits: SearchHit[] }
+
+export interface LinaCitation { ref: string; document_id: UUID; title: string; page_from: number | null; page_to: number | null; excerpt: string; match: string }
+export interface LinaMessage {
+  id: UUID; role: "user" | "assistant"; content: string; citations: LinaCitation[];
+  meta: { semantic?: string; sources_found?: number; insufficient?: boolean; model?: string; credits?: number; pending?: boolean };
+  created_at: string;
+}
+export interface LinaConversation { id: UUID; title: string; scope: { document_ids?: UUID[]; folder_id?: UUID }; created_at: string; updated_at: string; messages?: LinaMessage[] }
+export interface LinaStatus {
+  chat_configured: boolean; semantic_configured: boolean; chunks: number; embedded_chunks: number; indexed_documents: number;
+  embedding_provider: string | null; embedding_model: string | null;
 }

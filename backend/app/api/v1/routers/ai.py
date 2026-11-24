@@ -62,6 +62,10 @@ def _apply_provider(db: Session, p: AIProvider, body: ProviderIn, tenant_id: uui
         raise ValidationFailed("An API key is required for this provider")
     if body.kind in ("azure_openai", "openai_compatible") and not p.base_url:
         raise ValidationFailed("A base URL / endpoint is required for this provider")
+    p.embedding_model = (body.embedding_model or "").strip() or None
+    if p.embedding_model and body.kind not in ("openai", "openai_compatible", "azure_openai", "gemini"):
+        raise ValidationFailed("This provider has no embeddings API: use OpenAI, Azure OpenAI, Gemini or an "
+                               "OpenAI-compatible server for semantic search", code="embeddings_unsupported")
     if body.fallback_provider_id:
         fb = get_owned(db, AIProvider, tenant_id, body.fallback_provider_id, label="Fallback provider")
         if fb.id == p.id:

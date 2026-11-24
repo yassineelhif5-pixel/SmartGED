@@ -21,13 +21,14 @@ from pathlib import Path
 from typing import Any
 
 from pypdf import PdfReader, PdfWriter
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
 from app.ai.splitting import Detection, ai_segments, heuristic_segments, validate_segments
 from app.core.errors import Conflict, ValidationFailed
 from app.models import (
     Document,
+    DocumentChunk,
     DocumentRelation,
     DocumentSplitProposal,
     DocumentStatus,
@@ -240,6 +241,7 @@ def apply_split(db: Session, doc: Document, *, user_id: uuid.UUID | None,
     proposal.child_document_ids = [str(c.id) for c in children]
     doc.status = DocumentStatus.archived
     doc.archived_at = now
+    db.execute(delete(DocumentChunk).where(DocumentChunk.document_id == doc.id))  # children carry the content
     doc.validation_status = StepStatus.completed
     for job in parent_jobs.values():
         if job.status in (StepStatus.pending, StepStatus.running):

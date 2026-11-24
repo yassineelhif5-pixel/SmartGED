@@ -119,7 +119,8 @@ def render(template: str, variables: dict[str, Any]) -> str:
 
 def neutralise(content: str, limit: int) -> str:
     """Keep the document inside its delimiters (no early closing tag) and bounded."""
-    content = content.replace("</document>", "</ document>").replace("<document>", "< document>")
+    content = re.sub(r"<(/?)\s*(documents?)\s*>", lambda m: f"</ {m.group(2)}>" if m.group(1) else f"< {m.group(2)}>",
+                     content, flags=re.IGNORECASE)
     return content[:limit]
 
 
@@ -232,4 +233,6 @@ def validate_prompt_template(system: str, user: str) -> list[str]:
     names = sorted(set(_VAR.findall(system)) | set(_VAR.findall(user)))
     if "document_content" in names and "<document>" not in user:
         raise ValidationFailed("{{document_content}} must stay inside <document>…</document> delimiters")
+    if "sources" in names and "<documents>" not in user:
+        raise ValidationFailed("{{sources}} must stay inside <documents>…</documents> delimiters")
     return names

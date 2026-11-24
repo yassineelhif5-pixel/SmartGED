@@ -49,6 +49,27 @@ def process_document(self, tenant_id: str, document_id: str, force: bool = False
         raise self.retry(exc=exc, countdown=2 ** (self.request.retries + 2)) from exc
 
 
+@celery_app.task(name="documind.index_document", bind=True, max_retries=3, acks_late=True)
+def index_document_task(self, tenant_id: str, document_id: str) -> dict:  # type: ignore[no-untyped-def]
+    """Rebuild chunks / embeddings of one document without touching its workflow status."""
+    from app.database.session import session_scope
+    from app.models import Document
+    from app.services.knowledge_service import index_document
+
+    try:
+        with session_scope(tenant_id=uuid.UUID(tenant_id)) as db:
+            doc = db.get(Document, uuid.UUID(document_id))
+            if doc is None or doc.deleted_at is not None:
+                return {"skipped": "missing"}
+            return index_document(db, doc, key=f"reindex:{document_id}:v{doc.current_version}:{uuid.uuid4()}")
+    except Exception as exc:
+        raise self.retry(exc=exc, countdown=2 ** (self.request.retries + 2)) from exc
+
+
+def enqueue_indexing(tenant_id: uuid.UUID, document_id: uuid.UUID) -> None:
+    index_document_task.apply_async(args=[str(tenant_id), str(document_id)], queue="documents")
+
+
 @celery_app.task(name="documind.dead_letter")
 def dead_letter(tenant_id: str, document_id: str, error: str) -> None:
     log.error("pipeline_dead_letter", extra={"tenant_id": tenant_id, "document_id": document_id, "error": error})

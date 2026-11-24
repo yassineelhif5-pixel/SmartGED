@@ -57,6 +57,7 @@ class AIProvider(UUIDPk, Timestamps, TenantScoped, Base):
     api_key_encrypted: Mapped[str | None] = mapped_column(Text)
     api_key_hint: Mapped[str | None] = mapped_column(String(12))
     default_model: Mapped[str] = mapped_column(String(120), nullable=False)
+    embedding_model: Mapped[str | None] = mapped_column(String(120))  # set → used for semantic search
     temperature: Mapped[float | None] = mapped_column(Float)
     max_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=2048)
     timeout_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=60)

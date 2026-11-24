@@ -17,3 +17,4 @@ pypdf==6.17.0
 # azure-storage-blob>=12.23
 cryptography==50.0.1
 httpx==0.28.1
+pgvector==0.5.1

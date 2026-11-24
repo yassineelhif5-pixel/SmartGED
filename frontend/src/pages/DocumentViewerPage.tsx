@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Download, Lock, MoreHorizontal, Pencil, RotateCcw, Scissors, Trash2, Unlock, XCircle } from "lucide-react";
+import { ArrowLeft, Bot, Download, Lock, MoreHorizontal, Pencil, RotateCcw, Scissors, Trash2, Unlock, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { api, downloadFile } from "@/api/client";
 import { useDocument, useDocumentTypes, useFolders, useInvalidateDocs } from "@/hooks/queries";
@@ -109,6 +109,11 @@ export default function DocumentViewerPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {can("ai_assistant:read") && !doc.deleted_at && (
+            <Button variant="outline" size="sm" onClick={() => navigate(`/lina?document=${doc.id}`)}>
+              <Bot /> Demander à Lina
+            </Button>
+          )}
           {can("document:download") && (
             <Button variant="outline" size="sm" onClick={() => downloadFile(`/documents/${doc.id}/download`, doc.file_name).catch((e) => toast.error(e.message))}>
               <Download /> Télécharger

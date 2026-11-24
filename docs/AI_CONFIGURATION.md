@@ -48,6 +48,14 @@ Si plusieurs documents sont détectés, le traitement s'arrête en « À valider
 | `splitting.ai_enabled` | `true` | Analyse de structure seule |
 | `splitting.auto_apply_threshold` | absent | Applique sans revue si la confiance minimale des coupures atteint ce seuil |
 
+### Recherche sémantique et Lina (phase 4)
+
+- Chaque document est découpé en passages (~1 200 caractères, par page) à l'étape `indexing` : la recherche par mots-clés et Lina fonctionnent sans IA d'embeddings.
+- Pour la recherche par le sens, renseignez **Modèle d'embeddings** sur un fournisseur OpenAI, Azure OpenAI (nom du déploiement), Gemini ou compatible OpenAI (ex. `nomic-embed-text` avec Ollama). Anthropic n'a pas d'API d'embeddings. Cliquez ensuite sur **Réindexer**.
+- Paramètre d'organisation `search.min_similarity` (défaut 0,25) : en dessous, un passage n'est pas considéré comme pertinent.
+- Lina utilise le prompt `lina_answer` (modifiable dans le Prompt Studio ; `{{sources}}` doit rester entre `<documents>` et `</documents>`). Les citations renvoyées par le modèle sont vérifiées ; consommation enregistrée sous `lina` et `embedding`.
+- Base auto-hébergée : l'extension doit être créée une fois par un superutilisateur : `CREATE SCHEMA IF NOT EXISTS extensions; CREATE EXTENSION vector WITH SCHEMA extensions;`
+
 ### Prompt Studio
 
 Consignes plateforme (v1) pour `classification`, `metadata_extraction`, `document_summary`. Une organisation crée ses versions, les **teste sur un vrai document** (tokens, latence, coût), puis les publie (publication refusée sans test réussi, sauf `force`, tracé dans l'audit). « Revenir à la plateforme » annule la personnalisation.

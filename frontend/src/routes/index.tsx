@@ -10,6 +10,7 @@ const DashboardPage = lazy(() => import("@/pages/DashboardPage"));
 const DocumentsPage = lazy(() => import("@/pages/DocumentsPage"));
 const DocumentViewerPage = lazy(() => import("@/pages/DocumentViewerPage"));
 const SplitReviewPage = lazy(() => import("@/pages/SplitReviewPage"));
+const LinaPage = lazy(() => import("@/pages/LinaPage"));
 const ValidationPage = lazy(() => import("@/pages/ValidationPage"));
 const ProcessingPage = lazy(() => import("@/pages/ProcessingPage"));
 const TrashPage = lazy(() => import("@/pages/TrashPage"));
@@ -75,6 +76,7 @@ export const router = createBrowserRouter([
           { path: "/documents", element: s(<RequirePerm perm="document:read"><DocumentsPage /></RequirePerm>) },
           { path: "/documents/:id", element: s(<RequirePerm perm="document:read"><DocumentViewerPage /></RequirePerm>) },
           { path: "/documents/:id/split", element: s(<RequirePerm perm="document:read"><SplitReviewPage /></RequirePerm>) },
+          { path: "/lina", element: s(<RequirePerm perm="ai_assistant:read"><LinaPage /></RequirePerm>) },
           { path: "/validation", element: s(<RequirePerm perm="metadata:validate"><ValidationPage /></RequirePerm>) },
           { path: "/processing", element: s(<RequirePerm perm="processing:read"><ProcessingPage /></RequirePerm>) },
           { path: "/trash", element: s(<RequirePerm perm="document:delete"><TrashPage /></RequirePerm>) },

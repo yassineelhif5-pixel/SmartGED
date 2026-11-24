@@ -1,6 +1,6 @@
 # PROJECT_STATUS — SmartGED (DocuMind AI)
 
-_Dernière mise à jour : 23 novembre 2026 — v0.5 : phase 3 complète (Document Splitting Engine) + Supabase provisionné_
+_Dernière mise à jour : 24 novembre 2026 — v0.6 : phase 4 (recherche hybride + assistant Lina avec sources)_
 
 Dépôt : https://github.com/yassineelhif5-pixel/SmartGED (branches `main`, `develop`)
 
@@ -37,22 +37,28 @@ Dépôt : https://github.com/yassineelhif5-pixel/SmartGED (branches `main`, `dev
 | Registre de consommation idempotent, tarifs versionnés, quota de crédits | ✅ | ✅ onglet Consommation | ✅ |
 | Résumé de document (Lina) | ✅ | ✅ | ✅ |
 | Découpage des lots PDF : détection structure + IA, revue page par page, documents enfants liés, original archivé | ✅ | ✅ écran de découpage | ✅ |
+| Index de connaissances : passages (chunks) par page, plein texte, embeddings pgvector si configurés, réindexation | ✅ | ✅ carte « Index de connaissances » | ✅ |
+| Recherche hybride (mots-clés + sens, fusion RRF, seuil de similarité) | ✅ | ✅ recherche globale instantanée | ✅ |
+| Assistant Lina (RAG) : réponses sourcées, citations vérifiées, périmètre document / dossier, historique | ✅ | ✅ page Lina + « Demander à Lina » | ✅ |
 | Schéma PostgreSQL dédié (`DOCUMIND_DB_SCHEMA`) + migrations SQL Supabase | ✅ | — | ✅ base vierge |
 
 ## Tests
 
-- Backend : **54/54** (dont 9 sur l'IA, 9 sur les vues et les référentiels, 9 sur le découpage)
+- Backend : **61/61** (dont 9 sur l'IA, 9 sur les vues et les référentiels, 9 sur le découpage, 7 sur la recherche et Lina)
 - Ancien total backend : 27/27 (`pytest`) sur PostgreSQL réel — dont 7 tests d'isolation inter-tenant (lecture, écriture, RLS sans filtre applicatif, en-tête forgé, audit immuable).
 - Frontend : **10/10** (Vitest), `tsc` strict sans erreur, build de production OK.
 - Parcours bout-en-bout vérifié dans Chrome headless avec worker Celery réel : connexion → dépôt de 3 fichiers (PDF texte, PDF scanné, texte) → OCR → recherche sur le texte du PDF scanné → saisie et validation des métadonnées → publication. Aucune erreur console.
 - Découpage vérifié dans Chrome headless : lot de 7 pages (2 factures, 1 bon de commande, 1 contrat, 1 page blanche) → 4 documents proposés, appliqués, puis classés par le pipeline.
+- Lina vérifiée dans Chrome headless : ajout d'un modèle d'embeddings, réindexation (100 % vectorisé), recherche globale hybride, question → réponse avec 2 sources cliquables.
 - Lint `ruff` : OK.
 
 ## Problèmes connus / limites
 
-- **Supabase provisionné** (projet `gfndyqtkvfcdmnpugwdk`, révision 0006, 40 tables). Isolation vérifiée en tant que `smartged_app`, advisors sécurité sans alerte. Reste à activer le login de `smartged_app` avec votre mot de passe et à brancher l'API dessus.
+- **Supabase provisionné** (projet `gfndyqtkvfcdmnpugwdk`, révision 0007, 43 tables, pgvector dans le schéma `extensions`). Isolation vérifiée en tant que `smartged_app`, advisors sécurité sans alerte. Reste à activer le login de `smartged_app` avec votre mot de passe et à brancher l'API dessus.
 - Les vues partagées ne mémorisent pas encore la sélection de colonnes du tableau.
 - **IA testée sans vraie clé** : adaptateurs vérifiés sur les formats de réponse officiels (transport HTTP simulé) et parcours navigateur avec un LLM local de test. Un essai avec une clé réelle reste à faire.
+- Recherche vectorielle exacte (pas d'index HNSW) : adaptée jusqu'à quelques centaines de milliers de passages par organisation ; un index par dimension sera ajouté au besoin.
+- Lina n'est pas encore en streaming (réponse affichée d'un bloc).
 - Découpage : PDF uniquement (pas les TIFF multipages). La détection IA lit un extrait de chaque page (900 caractères), pas la page entière.
 - Pas de tarifs IA préremplis : à saisir par le Super Admin (sinon 1 crédit / 1 000 tokens).
 
@@ -69,6 +75,8 @@ Dépôt : https://github.com/yassineelhif5-pixel/SmartGED (branches `main`, `dev
 - **ADR-010** Adaptateurs IA en HTTP brut (httpx) plutôt que SDK : moteur neutre vis-à-vis des fournisseurs, testable sur les formats réels.
 - **ADR-011** Prompts plateforme partagés (`tenant_id` NULL, lisibles par tous via RLS) + surcharges par organisation ; publication conditionnée à un test réussi.
 - **ADR-012** Un découpage n'est jamais appliqué sans validation humaine, sauf si l'organisation fixe `splitting.auto_apply_threshold`. Le lot d'origine est archivé, jamais supprimé ; les enfants réutilisent son OCR.
+- **ADR-013** Toute récupération (recherche, Lina) passe par `visible_documents()` : point unique où brancher les ACL dossier/document. Sans passage pertinent, Lina répond « rien trouvé » sans appeler le modèle.
+- **ADR-014** Colonne vectorielle sans dimension fixe + `embedding_model` par passage : chaque organisation choisit son modèle ; un changement de modèle impose une réindexation.
 - **ADR-009** Sur Supabase, schéma `smartged` non exposé à PostgREST et rôle `smartged_app` NOBYPASSRLS ; `postgres` réservé aux migrations.
 
 - **ADR-001** Monolithe modulaire FastAPI (pas de microservices prématurés).
@@ -81,6 +89,6 @@ Dépôt : https://github.com/yassineelhif5-pixel/SmartGED (branches `main`, `dev
 ## Prochaines étapes
 
 1. Brancher une vraie clé IA et calibrer le seuil de confiance sur des documents réels.
-2. Phase 4 : embeddings pgvector, recherche hybride, assistant Lina avec RAG respectant les permissions.
+2. Phase 5 : workflows de validation configurables (étapes, délais, relances, notifications).
 3. Brancher l'API sur Supabase (login `smartged_app`, Session pooler).
 4. ACL au niveau dossier / document.

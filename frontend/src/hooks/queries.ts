@@ -68,6 +68,7 @@ export function useDocument(id: string) {
   return useQuery({
     queryKey: qk.document(id),
     queryFn: () => api<DocumentDetail>(`/documents/${id}`),
+    enabled: !!id,
     refetchInterval: (q) =>
       q.state.data && ["processing", "uploaded"].includes(q.state.data.status) ? 2000 : false,
   });

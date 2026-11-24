@@ -210,8 +210,10 @@ def step_metadata_extraction(db: Session, doc: Document, path: Path) -> dict:
 
 
 def step_indexing(db: Session, doc: Document, path: Path) -> dict:
-    # Full-text index is a generated tsvector column → always consistent with content_text.
-    return {"full_text": True, "vector": "phase_4"}
+    """Chunks for keyword retrieval (always) + embeddings for semantic search (when configured)."""
+    from app.services.knowledge_service import index_document
+
+    return index_document(db, doc, key=_ai_key(doc, "indexing"))
 
 
 def step_publication(db: Session, doc: Document, path: Path) -> dict:

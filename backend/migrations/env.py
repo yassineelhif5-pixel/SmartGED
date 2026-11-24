@@ -25,7 +25,7 @@ def run_migrations_offline() -> None:
     with context.begin_transaction():
         if SCHEMA:
             context.execute(f"CREATE SCHEMA IF NOT EXISTS {SCHEMA}")
-            context.execute(f"SET search_path TO {SCHEMA}, public")
+            context.execute(f"SET search_path TO {SCHEMA}, public, extensions")
         context.run_migrations()
 
 

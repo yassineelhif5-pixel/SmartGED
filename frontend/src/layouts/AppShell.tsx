@@ -56,7 +56,7 @@ const NAV: { section: string; items: NavItem[] }[] = [
   {
     section: "Intelligence",
     items: [
-      { to: "/roadmap#ai", label: "Assistant Lina", icon: Bot, soon: true },
+      { to: "/lina", label: "Assistant Lina", icon: Bot, perm: "ai_assistant:read" },
       { to: "/roadmap#workflows", label: "Workflows", icon: GitBranch, soon: true },
       { to: "/roadmap#ingestion", label: "Ingestion Hub", icon: Inbox, soon: true },
     ],

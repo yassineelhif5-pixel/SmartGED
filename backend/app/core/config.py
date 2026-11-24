@@ -96,7 +96,9 @@ class Settings(BaseSettings):
 
     @property
     def db_connect_args(self) -> dict[str, str]:
-        return {"options": f"-csearch_path={self.db_schema},public"} if self.db_schema else {}
+        # ``extensions`` holds pgvector on Supabase (and locally); missing schemas are ignored by PostgreSQL.
+        schema = f"{self.db_schema}," if self.db_schema else ""
+        return {"options": f"-csearch_path={schema}public,extensions"}
 
     @property
     def broker_url(self) -> str:

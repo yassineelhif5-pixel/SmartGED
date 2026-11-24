@@ -19,6 +19,8 @@ class ProviderIn(BaseModel):
     api_key: str | None = Field(default=None, max_length=500, description="Write-only. Omit to keep the stored key.")
     clear_api_key: bool = False
     default_model: str = Field(min_length=1, max_length=120)
+    embedding_model: str | None = Field(default=None, max_length=120,
+                                        description="Embeddings model for semantic search (not Anthropic)")
     temperature: float | None = Field(default=None, ge=0, le=2)
     max_tokens: int = Field(default=2048, ge=64, le=64000)
     timeout_seconds: int = Field(default=60, ge=5, le=600)
@@ -36,6 +38,7 @@ class ProviderOut(ORM):
     api_key_set: bool = False
     api_key_hint: str | None
     default_model: str
+    embedding_model: str | None = None
     temperature: float | None
     max_tokens: int
     timeout_seconds: int

@@ -8,6 +8,7 @@ from app.api.v1.routers import (
     folders,
     health,
     insights,
+    lina,
     objects,
     platform,
     splitting,
@@ -16,5 +17,5 @@ from app.api.v1.routers import (
 )
 
 api_router = APIRouter()
-for module in (health, auth, platform, users, folders, document_types, splitting, documents, insights, views, objects, ai):
+for module in (health, auth, platform, users, folders, document_types, splitting, documents, insights, views, objects, ai, lina):
     api_router.include_router(module.router)

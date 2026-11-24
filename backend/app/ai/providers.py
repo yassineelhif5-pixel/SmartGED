@@ -114,9 +114,9 @@ def _parse(cfg: ProviderConfig, data: dict) -> tuple[str, int, int, str]:
     raise AIProviderError(f"Unknown provider kind '{cfg.kind}'")
 
 
-def complete(cfg: ProviderConfig, system: str, user: str, *, json_mode: bool = True) -> Completion:
+def _post(cfg: ProviderConfig, url: str, headers: dict, body: dict) -> tuple[dict, int]:
+    """POST with retries on network errors, timeouts, 408/409/429/5xx. Returns (json, latency_ms)."""
     settings = get_settings()
-    url, headers, body = _request(cfg, system, user, json_mode)
     last: AIProviderError | None = None
     for attempt in range(settings.ai_max_retries):
         if attempt:
@@ -140,7 +140,62 @@ def complete(cfg: ProviderConfig, system: str, user: str, *, json_mode: bool = T
             if retryable:
                 continue
             raise last
-        text, tin, tout, model = _parse(cfg, resp.json())
-        return Completion(text=text, input_tokens=tin, output_tokens=tout, latency_ms=latency, model=model)
+        return resp.json(), latency
     assert last is not None
     raise last
+
+
+def complete(cfg: ProviderConfig, system: str, user: str, *, json_mode: bool = True) -> Completion:
+    url, headers, body = _request(cfg, system, user, json_mode)
+    data, latency = _post(cfg, url, headers, body)
+    text, tin, tout, model = _parse(cfg, data)
+    return Completion(text=text, input_tokens=tin, output_tokens=tout, latency_ms=latency, model=model)
+
+
+@dataclass
+class Embeddings:
+    vectors: list[list[float]]
+    input_tokens: int
+    latency_ms: int
+    model: str
+
+
+EMBEDDING_KINDS = ("openai", "openai_compatible", "azure_openai", "gemini")
+
+
+def embed(cfg: ProviderConfig, texts: list[str]) -> Embeddings:
+    """Embed a batch of texts with the provider's embeddings endpoint (``cfg.model`` = embedding model)."""
+    if cfg.kind not in EMBEDDING_KINDS:
+        raise AIProviderError(f"{cfg.kind} has no embeddings API: configure an OpenAI, Azure OpenAI, Gemini or "
+                              "OpenAI-compatible provider for semantic search")
+    if cfg.kind in ("openai", "openai_compatible"):
+        base = (cfg.base_url or "https://api.openai.com/v1").rstrip("/")
+        headers = {"Authorization": f"Bearer {cfg.api_key}"} if cfg.api_key else {}
+        data, latency = _post(cfg, f"{base}/embeddings", headers, {"model": cfg.model, "input": texts})
+    elif cfg.kind == "azure_openai":
+        if not cfg.base_url:
+            raise AIProviderError("Azure OpenAI requires the resource endpoint (base URL)")
+        version = cfg.api_version or AZURE_DEFAULT_API_VERSION
+        url = f"{cfg.base_url.rstrip('/')}/openai/deployments/{cfg.model}/embeddings?api-version={version}"
+        data, latency = _post(cfg, url, {"api-key": cfg.api_key or ""}, {"input": texts})
+    else:  # gemini
+        base = (cfg.base_url or "https://generativelanguage.googleapis.com/v1beta").rstrip("/")
+        body = {"requests": [{"model": f"models/{cfg.model}", "content": {"parts": [{"text": t}]}} for t in texts]}
+        data, latency = _post(cfg, f"{base}/models/{cfg.model}:batchEmbedContents",
+                              {"x-goog-api-key": cfg.api_key or ""}, body)
+        try:
+            vectors = [list(map(float, e["values"])) for e in data["embeddings"]]
+        except (KeyError, TypeError, ValueError) as exc:
+            raise AIProviderError(f"Unexpected embeddings response: {exc}") from exc
+        return Embeddings(vectors=vectors, input_tokens=sum(len(t) for t in texts) // 4, latency_ms=latency,
+                          model=cfg.model)
+    try:
+        items = sorted(data["data"], key=lambda d: d.get("index", 0))
+        vectors = [list(map(float, d["embedding"])) for d in items]
+    except (KeyError, TypeError, ValueError) as exc:
+        raise AIProviderError(f"Unexpected embeddings response: {exc}") from exc
+    usage = data.get("usage") or {}
+    tokens = int(usage.get("prompt_tokens") or usage.get("total_tokens") or sum(len(t) for t in texts) // 4)
+    if len(vectors) != len(texts):
+        raise AIProviderError("Embeddings response does not match the number of inputs")
+    return Embeddings(vectors=vectors, input_tokens=tokens, latency_ms=latency, model=str(data.get("model") or cfg.model))
